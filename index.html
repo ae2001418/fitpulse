@@ -16,6 +16,7 @@
 <body>
 <title>健身紀錄</title>
 <script src="shared-photos.js"></script>
+<script src="cloud-config.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
 /* Layout: single column logbook — month calendar, then the chosen day: body part → exercise → numbers, totals, entries. */
@@ -299,6 +300,18 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 .backup-note { margin: 0; font-size: .85rem; color: var(--muted); }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .backup-actions button { padding: 10px 18px; }
+/* present for the iPhone password manager, invisible to the viewer */
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+.cloud { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.cloud h3 { margin: 0; font-size: 1rem; }
+.cloud-state { margin: 0; font-weight: 700; color: var(--c-back); }
+.code-form { display: grid; gap: 8px; }
+.code-row { display: flex; gap: 8px; }
+.code-row input { flex: 1; font-family: var(--display); font-size: 1.15rem; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.code-row button { white-space: nowrap; }
+.code-banner { display: grid; gap: 10px; background: color-mix(in srgb, var(--c-back) 12%, var(--surface)); border: 1px solid var(--c-back); border-radius: 12px; padding: 12px 14px; font-size: .9rem; }
+.banner-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.banner-acts button { padding: 8px 14px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .logo { width: 42px; height: 42px; flex-shrink: 0; }
 .top button[aria-expanded="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
@@ -388,6 +401,13 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
   </nav>
 
   <div class="view" id="viewLog" role="tabpanel" aria-labelledby="tabLog">
+  <div class="code-banner" id="codeBanner" hidden>
+    <span>☁ 紀錄已開始自動備份。請先把<b>備份碼</b>存好，刪掉 App 時才救得回來。</span>
+    <div class="banner-acts">
+      <button type="button" class="primary" id="bannerGo">查看備份碼</button>
+      <button type="button" id="ackCode">我已存好</button>
+    </div>
+  </div>
   <div class="dayhead-wrap">
     <div class="dayhead">
       <button type="button" class="date-btn" id="dateBtn" aria-expanded="false" aria-controls="calPop" aria-label="選擇日期">
@@ -499,6 +519,33 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
       <button type="button" id="importBtn">匯入備份</button>
     </div>
     <input type="file" id="importInput" accept=".json,application/json" hidden>
+
+    <div class="cloud" id="cloudBox" hidden>
+      <h3>雲端自動備份</h3>
+      <p class="cloud-state" id="cloudState">☁ 自動備份已開啟</p>
+      <p class="backup-note">每次記錄後會自動備份到雲端。刪掉 App 或換手機時，用下面的<b>備份碼</b>就能把紀錄救回來。<b>備份碼只有這裡看得到，請一定要存好</b>，弄丟了沒有人能幫你找回。</p>
+      <form class="code-form" id="codeForm" autocomplete="on">
+        <input type="text" name="username" autocomplete="username" value="FitPulse 健身紀錄" readonly class="vh" tabindex="-1" aria-hidden="true">
+        <label for="cloudCode">我的備份碼</label>
+        <div class="code-row">
+          <input id="cloudCode" name="password" type="text" autocomplete="new-password" readonly spellcheck="false">
+          <button type="button" id="copyCode">複製</button>
+        </div>
+        <div class="backup-actions">
+          <button type="submit" class="primary">存到 iPhone 密碼</button>
+          <button type="button" id="shareCode">傳給自己（LINE／備忘錄）</button>
+        </div>
+      </form>
+      <form class="code-form" id="restoreForm" autocomplete="on">
+        <input type="text" name="username" autocomplete="username" value="FitPulse 健身紀錄" readonly class="vh" tabindex="-1" aria-hidden="true">
+        <label for="restoreCode">用備份碼還原</label>
+        <div class="code-row">
+          <input id="restoreCode" name="password" type="text" autocomplete="current-password" placeholder="FP-XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocapitalize="characters">
+          <button type="submit" id="restoreBtn">還原</button>
+        </div>
+        <p class="backup-note">還原會把雲端的紀錄補進這支手機（已經有的不會被覆蓋），之後這支手機也改用這組備份碼繼續備份。</p>
+      </form>
+    </div>
   </section>
   </div>
 
@@ -624,8 +671,8 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
     const persist = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(days)); } catch (e) {} };
     $("status").textContent = "紀錄只存在這個瀏覽器";
     return {
-      save: async () => persist(), remove: async () => persist(),
-      saveEx: async () => { try { localStorage.setItem(LS_EX_KEY, JSON.stringify(exMap)); } catch (e) {} },
+      save: async () => { persist(); scheduleCloud(); }, remove: async () => { persist(); scheduleCloud(); },
+      saveEx: async () => { try { localStorage.setItem(LS_EX_KEY, JSON.stringify(exMap)); } catch (e) {} scheduleCloud(); },
     };
   }
 
@@ -1481,6 +1528,11 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
       $("status").textContent = "這不是健身紀錄的備份檔，請選擇「健身紀錄備份-日期.json」";
       return;
     }
+    await mergeBackup(payload);
+  }
+
+  // shared by file import and cloud restore
+  async function mergeBackup(payload) {
     if (!store) return;
     let addedDays = 0, addedEntries = 0;
     const changed = [];
@@ -1522,7 +1574,140 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
     }
     render();
     $("status").textContent = "已匯入 " + addedEntries + " 個動作（新增 " + addedDays + " 天）" + (addedPhotos ? "、" + addedPhotos + " 張照片" : "");
+    return { addedEntries, addedDays };
   }
+
+  // ---------- automatic cloud backup (standalone site only) ----------
+  // Each phone gets a random backup code; every change is pushed to Supabase a few seconds later.
+  // The database only keeps a hash of the code and is reachable solely through save_backup / load_backup.
+  const CLOUD = window.FITPULSE_CLOUD || null;          // { url, key } from cloud-config.js
+  const LS_CODE = "liftlog.cloudCode", LS_LAST = "liftlog.cloudLast", LS_ACK = "liftlog.cloudAck";
+  const CODE_RE = /^FP(-[A-Z0-9]{4}){4}$/;
+  let cloudOn = false, cloudTimer = null, cloudBusy = false, cloudAgain = false;
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+
+  function newCode() {
+    const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no I, O, 0, 1 — easy to read back
+    const r = crypto.getRandomValues(new Uint8Array(16));
+    const s = Array.from(r, (b) => abc[b % abc.length]).join("");
+    return "FP-" + s.match(/.{4}/g).join("-");
+  }
+  const normCode = (v) => {
+    const s = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^FP/, "");
+    return s.length === 16 ? "FP-" + s.match(/.{4}/g).join("-") : null;
+  };
+
+  async function rpc(fn, body) {
+    const r = await fetch(CLOUD.url.replace(/\/$/, "") + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      // legacy anon keys are JWTs and also go in Authorization; new "sb_publishable_" keys go in apikey only
+      headers: Object.assign({ apikey: CLOUD.key, "Content-Type": "application/json" },
+        CLOUD.key.startsWith("eyJ") ? { Authorization: "Bearer " + CLOUD.key } : {}),
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error("cloud " + r.status);
+    return r.json();
+  }
+
+  function scheduleCloud(delay = 3000) {
+    if (!cloudOn) return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(pushCloud, delay);
+  }
+
+  async function pushCloud() {
+    if (!cloudOn) return;
+    if (cloudBusy) { cloudAgain = true; return; }
+    cloudBusy = true;
+    renderCloud("uploading");
+    try {
+      const payload = { app: BACKUP_TAG, version: 1, exportedAt: new Date().toISOString(), days, exercises: exMap };
+      await rpc("save_backup", { p_code: lsGet(LS_CODE), p_data: payload });
+      lsSet(LS_LAST, new Date().toISOString());
+      renderCloud();
+    } catch (e) {
+      renderCloud(navigator.onLine === false ? "offline" : "error");
+      setTimeout(() => scheduleCloud(0), 60000);   // try again in a minute
+    } finally {
+      cloudBusy = false;
+      if (cloudAgain) { cloudAgain = false; scheduleCloud(500); }
+    }
+  }
+
+  const hm = (iso) => { const d = new Date(iso); return (d.getMonth() + 1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+
+  function renderCloud(state) {
+    if (!cloudOn) return;
+    const last = lsGet(LS_LAST);
+    const text = state === "uploading" ? "☁ 備份中…"
+      : state === "offline" ? "☁ 目前沒有網路，連上後會自動備份"
+      : state === "error" ? "☁ 備份失敗，稍後會自動重試"
+      : last ? "☁ 已自動備份 " + hm(last) : "☁ 自動備份已開啟";
+    $("cloudState").textContent = text;
+    $("status").textContent = text;
+    $("cloudCode").value = lsGet(LS_CODE) || "";
+    $("codeBanner").hidden = lsGet(LS_ACK) === lsGet(LS_CODE);
+  }
+
+  function initCloud() {
+    if (!CLOUD || !CLOUD.url || !CLOUD.key || assets) return;   // claude.ai version keeps its own sync
+    cloudOn = true;
+    if (!CODE_RE.test(lsGet(LS_CODE) || "")) { lsSet(LS_CODE, newCode()); lsSet(LS_LAST, null); }
+    $("cloudBox").hidden = false;
+    renderCloud();
+    // back up on open when the last copy is over an hour old
+    const last = lsGet(LS_LAST);
+    if (!last || Date.now() - new Date(last).getTime() > 3600000) scheduleCloud(1500);
+  }
+
+  $("copyCode").addEventListener("click", async () => {
+    const code = lsGet(LS_CODE);
+    try { await navigator.clipboard.writeText(code); $("copyCode").textContent = "已複製"; }
+    catch (e) { $("cloudCode").select(); $("copyCode").textContent = "請手動複製"; }
+    setTimeout(() => { $("copyCode").textContent = "複製"; }, 2000);
+  });
+  $("shareCode").addEventListener("click", async () => {
+    const text = "我的健身紀錄備份碼：" + lsGet(LS_CODE) + "\n（換手機或刪掉 App 後，用這組碼還原紀錄）";
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else { await navigator.clipboard.writeText(text); $("status").textContent = "已複製備份碼，可以貼到備忘錄或 LINE"; }
+    } catch (e) { /* the viewer closed the share sheet */ }
+  });
+  // submitting this little "login" form lets the iPhone offer to save the code in the Passwords app
+  $("codeForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    lsSet(LS_ACK, lsGet(LS_CODE));
+    renderCloud();
+    $("status").textContent = "如果 iPhone 跳出「儲存密碼」，按「儲存」就完成了";
+  });
+  $("ackCode").addEventListener("click", () => { lsSet(LS_ACK, lsGet(LS_CODE)); renderCloud(); });
+  $("bannerGo").addEventListener("click", () => {
+    showView("hist");
+    $("cloudBox").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  $("restoreForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const btn = $("restoreBtn"), code = normCode($("restoreCode").value);
+    if (!code) { $("status").textContent = "備份碼格式不對，應該像 FP-XXXX-XXXX-XXXX-XXXX"; return; }
+    if (!armConfirm(btn, "還原", "確定還原？")) return;
+    btn.disabled = true; $("status").textContent = "從雲端讀取中…";
+    try {
+      const data = await rpc("load_backup", { p_code: code });
+      if (!data || data.app !== BACKUP_TAG) { $("status").textContent = "找不到這組備份碼的備份，請確認有沒有打錯"; return; }
+      const res = await mergeBackup(data);
+      // keep backing up to the same cloud copy from now on
+      lsSet(LS_CODE, code); lsSet(LS_ACK, code);
+      $("restoreCode").value = "";
+      renderCloud();
+      $("status").textContent = "已還原 " + res.addedEntries + " 個動作（" + res.addedDays + " 天），之後會繼續備份到這組備份碼";
+      scheduleCloud(500);
+    } catch (e) {
+      $("status").textContent = "還原失敗，請確認網路後再試一次";
+    } finally { btn.disabled = false; }
+  });
+  window.addEventListener("online", () => scheduleCloud(500));
 
   $("exportBtn").addEventListener("click", exportBackup);
   $("importBtn").addEventListener("click", () => { $("importInput").value = ""; $("importInput").click(); });
@@ -1763,6 +1948,7 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
       $("backupNote").textContent = "把所有訓練紀錄、動作清單和你自己拍的照片存成一個檔案；換手機時再用「匯入」放回來。";
     }
     render();
+    initCloud();
   };
   initStore().then((s) => { store = s; return afterStore(); }).catch(() => { store = localStore(); return afterStore(); });
 })();
