@@ -15,6 +15,7 @@
 </head>
 <body>
 <title>健身紀錄</title>
+<script src="shared-photos.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
 /* Layout: single column logbook — month calendar, then the chosen day: body part → exercise → numbers, totals, entries. */
@@ -492,7 +493,7 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 
   <section class="backup" aria-label="備份與轉移">
     <h2>備份與轉移</h2>
-    <p class="backup-note">把所有訓練紀錄和動作清單存成一個檔案；換手機、換版本時再用「匯入」放回來。照片不會包含在備份裡。</p>
+    <p class="backup-note" id="backupNote">把所有訓練紀錄和動作清單存成一個檔案；換手機、換版本時再用「匯入」放回來。照片不會包含在備份裡。</p>
     <div class="backup-actions">
       <button type="button" class="primary" id="exportBtn">匯出備份</button>
       <button type="button" id="importBtn">匯入備份</button>
@@ -543,7 +544,56 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
   let exImages = {};      // { "chest|腿推": assetId } — one photo per exercise, to tell machines apart
   let assets = null;      // photo uploads; null when this view can't store files
   const imgKey = (cat, name) => cat + "|" + name;
-  const imgOf = (cat, name) => { const id = exImages[imgKey(cat, name)]; return id ? "/_blob/" + id : null; };
+  // photo sources, first match wins: your own (claude.ai asset, or this phone's IndexedDB), then the site's shared photo
+  const SHARED_PHOTOS = window.FITPULSE_SHARED_PHOTOS || {};
+  let localPics = {};     // { "chest|臥推": objectURL } loaded from IndexedDB on the standalone site
+  let idbOk = false;      // this browser can keep photos on the device
+  const ownPhoto = (cat, name) => { const k = imgKey(cat, name); return exImages[k] ? "/_blob/" + exImages[k] : localPics[k] || null; };
+  const imgOf = (cat, name) => ownPhoto(cat, name) || SHARED_PHOTOS[imgKey(cat, name)] || null;
+  const canUpload = () => !!assets || idbOk;
+
+  // tiny IndexedDB wrapper: one object store, photo blobs keyed by "cat|name"
+  const idb = (() => {
+    let opening = null;
+    const open = () => opening || (opening = new Promise((res, rej) => {
+      const r = indexedDB.open("fitpulse", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("photos");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+    const run = async (mode, fn) => {
+      const db = await open();
+      return new Promise((res, rej) => {
+        const t = db.transaction("photos", mode), req = fn(t.objectStore("photos"));
+        t.oncomplete = () => res(req && req.result);
+        t.onerror = () => rej(t.error);
+      });
+    };
+    return {
+      get: (k) => run("readonly", (s) => s.get(k)),
+      put: (k, v) => run("readwrite", (s) => s.put(v, k)),
+      del: (k) => run("readwrite", (s) => s.delete(k)),
+      async all() {
+        const db = await open();
+        return new Promise((res, rej) => {
+          const s = db.transaction("photos").objectStore("photos"), out = {};
+          const c = s.openCursor();
+          c.onsuccess = () => { const cur = c.result; if (cur) { out[cur.key] = cur.value; cur.continue(); } else res(out); };
+          c.onerror = () => rej(c.error);
+        });
+      },
+    };
+  })();
+
+  async function loadLocalPics() {
+    if (typeof indexedDB === "undefined") return;
+    try {
+      const all = await idb.all();
+      Object.values(localPics).forEach((u) => URL.revokeObjectURL(u));
+      localPics = Object.fromEntries(Object.entries(all).map(([k, b]) => [k, URL.createObjectURL(b)]));
+      idbOk = true;
+    } catch (e) { idbOk = false; }
+  }
   let mCat = "chest";     // body part open in the manage panel
   const exList = (cat) => exMap[cat] || CAT[cat].ex;
   const KINDS = [["work", "正式"], ["warm", "熱身"], ["drop", "遞減"]];
@@ -989,19 +1039,20 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
       if (pic) {
         const im = document.createElement("img"); im.src = pic; im.alt = ""; thumb.append(im);
         thumb.setAttribute("aria-label", "更換「" + n + "」的照片");
-        rmpic.hidden = !assets;
+        // only your own photo can be removed; a shared one stays (yours would just cover it)
+        rmpic.hidden = !canUpload() || !ownPhoto(mCat, n);
       } else {
         thumb.textContent = "＋照片"; thumb.classList.add("empty-pic");
         thumb.setAttribute("aria-label", "幫「" + n + "」加照片");
       }
-      thumb.hidden = !assets && !pic;
-      thumb.disabled = !assets;
+      thumb.hidden = !canUpload() && !pic;
+      thumb.disabled = !canUpload();
       thumb.addEventListener("click", () => pickPhoto(mCat, n));
       rmpic.addEventListener("click", () => { if (armConfirm(rmpic, "移除照片", "確定移除？")) removePhoto(mCat, n); });
       const del = row.querySelector(".del");
       del.addEventListener("click", () => {
         if (!armConfirm(del, "刪除", "確定？")) return;
-        if (exImages[imgKey(mCat, n)]) removePhoto(mCat, n, true);
+        if (ownPhoto(mCat, n)) removePhoto(mCat, n, true);
         setList(mCat, list.filter((x) => x !== n));
       });
       enableDrag(row, row.querySelector(".grip"), $("mList"), () => {
@@ -1022,6 +1073,11 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
     exMap[cat] = list.map((x) => (x === from ? to : x));
     const oldKey = imgKey(cat, from);
     if (exImages[oldKey]) { exImages[imgKey(cat, to)] = exImages[oldKey]; delete exImages[oldKey]; }
+    if (localPics[oldKey]) {
+      const newKey = imgKey(cat, to);
+      localPics[newKey] = localPics[oldKey]; delete localPics[oldKey];
+      idb.get(oldKey).then((b) => b && idb.put(newKey, b)).then(() => idb.del(oldKey)).catch(() => {});
+    }
     commitEx();
     Object.keys(days).forEach((date) => {
       const es = entriesOf(date);
@@ -1103,17 +1159,17 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
   let photoTarget = null;
 
   function pickPhoto(cat, name) {
-    if (!assets) return;
+    if (!canUpload()) return;
     photoTarget = { cat, name };
     $("photoInput").value = "";
     $("photoInput").click();
   }
 
-  // phone photos are large; shrink to ~1000px JPEG before upload
-  async function shrink(file) {
+  // phone photos are large; shrink to a JPEG before storing (1000px online, 800px on the phone)
+  async function shrink(file, max = 1000) {
     try {
       const bmp = await createImageBitmap(file);
-      const s = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+      const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
       const cv = document.createElement("canvas");
       cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s);
       cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
@@ -1132,7 +1188,22 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
   $("photoInput").addEventListener("change", async () => {
     const file = $("photoInput").files[0], target = photoTarget;
     photoTarget = null;
-    if (!file || !target || !assets) return;
+    if (!file || !target || !canUpload()) return;
+    if (!assets) {
+      // standalone site: keep the photo on this phone
+      $("status").textContent = "儲存照片中…";
+      try {
+        const key = imgKey(target.cat, target.name), blob = await shrink(file, 800);
+        await idb.put(key, blob);
+        if (localPics[key]) URL.revokeObjectURL(localPics[key]);
+        localPics[key] = URL.createObjectURL(blob);
+        render();
+        $("status").textContent = "照片已更新（存在這支手機）";
+      } catch (e) {
+        $("status").textContent = "照片儲存失敗，手機空間可能不足";
+      }
+      return;
+    }
     $("status").textContent = "上傳照片中…";
     try {
       const res = await assets.upload(await shrink(file));
@@ -1148,6 +1219,12 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 
   function removePhoto(cat, name, quiet) {
     const key = imgKey(cat, name), id = exImages[key];
+    if (localPics[key]) {
+      URL.revokeObjectURL(localPics[key]);
+      delete localPics[key];
+      idb.del(key).catch(() => {});
+      if (!quiet) render();
+    }
     if (!id) return;
     delete exImages[key];
     if (!quiet) { commitEx(); render(); }
@@ -1368,6 +1445,14 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 
   async function exportBackup() {
     const payload = { app: BACKUP_TAG, version: 1, exportedAt: new Date().toISOString(), days, exercises: exMap };
+    // photos kept on this phone travel inside the backup as data URLs
+    if (!assets && Object.keys(localPics).length) {
+      payload.photos = {};
+      for (const k of Object.keys(localPics)) {
+        const blob = await idb.get(k).catch(() => null);
+        if (blob) payload.photos[k] = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+      }
+    }
     const filename = "健身紀錄備份-" + ymd(new Date()) + ".json";
     const data = JSON.stringify(payload, null, 1);
     try {
@@ -1422,8 +1507,21 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
     }
     $("status").textContent = "匯入中…";
     for (const date of changed) await commit(date);
+    // photos: only fill exercises that have no photo of their own here yet
+    let addedPhotos = 0;
+    if (!assets && idbOk && payload.photos && typeof payload.photos === "object") {
+      for (const [k, url] of Object.entries(payload.photos)) {
+        if (localPics[k] || typeof url !== "string" || !url.startsWith("data:image/")) continue;
+        try {
+          const blob = await (await fetch(url)).blob();
+          await idb.put(k, blob);
+          localPics[k] = URL.createObjectURL(blob);
+          addedPhotos++;
+        } catch (e) { /* skip a broken photo, keep going */ }
+      }
+    }
     render();
-    $("status").textContent = "已匯入 " + addedEntries + " 個動作（新增 " + addedDays + " 天）";
+    $("status").textContent = "已匯入 " + addedEntries + " 個動作（新增 " + addedDays + " 天）" + (addedPhotos ? "、" + addedPhotos + " 張照片" : "");
   }
 
   $("exportBtn").addEventListener("click", exportBackup);
@@ -1657,7 +1755,16 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 
   renderSets();
   render();
-  initStore().then((s) => { store = s; render(); }).catch(() => { store = localStore(); render(); });
+  const afterStore = async () => {
+    if (!assets) {
+      await loadLocalPics();
+      // ask the browser not to clear this app's data when the phone runs low on space
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+      $("backupNote").textContent = "把所有訓練紀錄、動作清單和你自己拍的照片存成一個檔案；換手機時再用「匯入」放回來。";
+    }
+    render();
+  };
+  initStore().then((s) => { store = s; return afterStore(); }).catch(() => { store = localStore(); return afterStore(); });
 })();
 </script>
 </body>
