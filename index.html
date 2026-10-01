@@ -1,0 +1,1663 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5d4b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="健身紀錄">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>健身紀錄</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: single column logbook — month calendar, then the chosen day: body part → exercise → numbers, totals, entries. */
+:root {
+  --bg: #eef0ec;
+  --surface: #ffffff;
+  --ink: #17201b;
+  --muted: #5d6862;
+  --line: #d5dad4;
+  --accent: #1f4fbf;
+  --accent-ink: #ffffff;
+  --danger: #b3261e;
+  --c-chest: #c8322b;
+  --c-shoulder: #d98a1c;
+  --c-legs: #1f4fbf;
+  --c-back: #2f8a4c;
+  --c-arms: #7a3fb8;
+  --c-cardio: #178a8a;
+  --c-other: #8a948e;
+  --display: "Barlow Condensed", "Arial Narrow", "Noto Sans TC", sans-serif;
+  --body: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121714; --surface: #1b221e; --ink: #e7ece8; --muted: #9aa59f; --line: #2c3530;
+    --accent: #5b8cff; --accent-ink: #0b1020; --danger: #ff7a70;
+    --c-chest: #ef5b52; --c-shoulder: #f0a940; --c-legs: #5b8cff; --c-back: #4fb56d; --c-arms: #b07cf0; --c-cardio: #3cc4c4; --c-other: #a7b0ab;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121714; --surface: #1b221e; --ink: #e7ece8; --muted: #9aa59f; --line: #2c3530;
+  --accent: #5b8cff; --accent-ink: #0b1020; --danger: #ff7a70;
+  --c-chest: #ef5b52; --c-shoulder: #f0a940; --c-legs: #5b8cff; --c-back: #4fb56d; --c-arms: #b07cf0; --c-cardio: #3cc4c4; --c-other: #a7b0ab;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 640px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 20px; }
+h1, h2 { font-family: var(--display); text-transform: uppercase; letter-spacing: .03em; margin: 0; text-wrap: balance; }
+h1 { font-size: 2.1rem; line-height: 1; font-weight: 700; }
+h1 small { display: block; font-family: var(--body); text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 400; color: var(--muted); margin-top: 4px; }
+h2 { font-size: 1.15rem; font-weight: 600; color: var(--muted); }
+section { display: grid; gap: 10px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 8px 12px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.icon-btn { width: 36px; height: 36px; padding: 0; font-size: 1.15rem; line-height: 1; }
+
+/* calendar */
+.cal { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-head b { font-family: var(--display); font-size: 1.4rem; font-weight: 600; }
+.cal-head .right { display: flex; gap: 6px; align-items: center; }
+.today-btn { font-size: .8rem; padding: 4px 10px; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.wd { text-align: center; font-size: .72rem; color: var(--muted); letter-spacing: .04em; }
+.cell { aspect-ratio: 1 / 1; max-width: 100%; padding: 4px 2px; border-radius: 8px; border: 1px solid transparent; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; }
+.cell .n { font-family: var(--display); font-size: 1.1rem; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cell.out .n { color: var(--muted); opacity: .45; }
+.cell.today { border-color: var(--line); }
+.cell.today .n { font-weight: 700; color: var(--accent); }
+.cell.sel { background: var(--accent); border-color: var(--accent); }
+.cell.sel .n { color: var(--accent-ink); }
+.cell { aspect-ratio: auto; min-height: 58px; justify-content: flex-start; gap: 3px; }
+.cell.trained { background: color-mix(in srgb, var(--tint) 16%, var(--surface)); border-color: color-mix(in srgb, var(--tint) 45%, transparent); }
+.cell.trained .n { font-weight: 700; }
+.cell.sel.trained { background: var(--accent); border-color: var(--accent); }
+.tags { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.ctag { font-size: .62rem; font-weight: 700; line-height: 1; color: var(--surface); padding: 2px 3px; border-radius: 4px; white-space: nowrap; }
+.ctag.more { background: var(--muted); }
+.cell.sel .ctag { box-shadow: 0 0 0 1px var(--accent-ink); }
+.dots { display: flex; gap: 3px; min-height: 7px; flex-wrap: wrap; justify-content: center; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.cell.sel .dot { box-shadow: 0 0 0 1.5px var(--accent-ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .75rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+.dayhead b { font-family: var(--display); font-size: 1.7rem; font-weight: 700; line-height: 1.1; display: block; }
+.dayhead span { color: var(--muted); font-size: .85rem; }
+
+/* entry form */
+form.add { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
+.step { display: grid; gap: 8px; }
+.step-label { font-size: .78rem; color: var(--muted); letter-spacing: .04em; }
+.pick { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 10px; }
+select { font: inherit; font-size: 1rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; min-width: 0; cursor: pointer; }
+select:disabled { opacity: .5; cursor: not-allowed; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sel-wrap { position: relative; display: block; }
+.sel-wrap select { padding-left: 28px; }
+.swatch { position: absolute; left: 11px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--line); pointer-events: none; }
+.fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sets { display: grid; gap: 6px; }
+.set-head, .set-row { display: grid; grid-template-columns: 22px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.2fr) 32px; gap: 6px; align-items: center; }
+.set-head { font-size: .72rem; color: var(--muted); letter-spacing: .04em; }
+.set-rows { display: grid; gap: 6px; }
+.set-row .idx { font-family: var(--display); font-size: 1.15rem; font-weight: 600; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.set-row select { padding: 8px 6px; font-size: .9rem; }
+.set-row input[type=number] { padding: 6px 10px; }
+.set-row.warm .idx { color: var(--c-shoulder); }
+.set-row.drop .idx { color: var(--c-arms); }
+.set-block { display: grid; gap: 4px; }
+.set-block:has(.drop-stage) { background: color-mix(in srgb, var(--c-arms) 8%, transparent); border-radius: 8px; padding: 4px 0 6px; }
+.drop-stage .idx { color: var(--c-arms); font-size: 1rem; }
+.stage-lab { font-size: .8rem; color: var(--c-arms); font-weight: 700; padding-left: 6px; }
+.more-drop { justify-self: start; margin-left: 28px; border: none; background: none; color: var(--c-arms); font-size: .82rem; padding: 2px 6px; }
+.set-row input:user-invalid { border-color: var(--danger); }
+.rm-set { border: none; background: none; color: var(--muted); padding: 4px; font-size: 1.1rem; line-height: 1; }
+.rm-set:hover { color: var(--danger); }
+.rm-set:disabled { opacity: .25; cursor: default; }
+.add-set { border-style: dashed; background: transparent; color: var(--muted); padding: 8px; font-size: .9rem; }
+/* all sets of one exercise stay on a single row; it scrolls sideways only if there are too many */
+.setchips { display: flex; gap: 5px; margin-top: 8px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.sc { flex: 1 0 auto; display: grid; gap: 1px; padding: 5px 7px 6px; border-radius: 8px; background: var(--bg); border-top: 3px solid var(--line); min-width: 0; }
+.sc .lab { font-size: .68rem; color: var(--muted); letter-spacing: .04em; white-space: nowrap; }
+.sc .w { font-family: var(--display); font-size: 1.35rem; font-weight: 700; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sc .w small { font-size: .7rem; font-weight: 500; color: var(--muted); margin-left: 1px; }
+.sc .r { font-family: var(--display); font-size: .95rem; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sc .wr { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.sc .w { font-size: 1.15rem; }
+.sc .r { font-size: .85rem; }
+.entry .acts { flex-direction: column; align-items: flex-end; }
+.sc .r.dr { color: var(--c-arms); font-size: .88rem; }
+.sc.warm { border-top-color: var(--c-shoulder); }
+.sc.warm .lab { color: var(--c-shoulder); font-weight: 700; }
+.sc.drop { border-top-color: var(--c-arms); }
+.sc.drop .lab { color: var(--c-arms); font-weight: 700; }
+.sc.work { border-top-color: var(--ink); }
+.fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+label { display: grid; gap: 4px; font-size: .78rem; color: var(--muted); letter-spacing: .04em; }
+input { font: inherit; font-size: 1rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; min-width: 0; }
+input[type=number] { font-family: var(--display); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; padding: 12px; font-size: 1rem; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.tabs button { border: none; background: transparent; color: var(--muted); font-weight: 700; padding: 10px 8px; border-radius: 9px; }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+.view { display: grid; gap: 20px; }
+.dayhead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.form-head { display: flex; justify-content: space-between; align-items: center; }
+.form-head b { font-family: var(--display); font-size: 1.25rem; font-weight: 600; letter-spacing: .03em; }
+.open-form { width: 100%; }
+.summary-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; gap: 14px; }
+.summary-card .summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 480px) { .summary-card .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.dayhead { flex-wrap: wrap; align-items: flex-end; }
+.sessions { display: grid; gap: 8px; justify-items: end; margin-left: auto; }
+.session { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; justify-content: flex-end; }
+.s-label { align-self: center; display: grid; justify-items: end; font-family: var(--display); font-weight: 700; font-size: 1rem; color: var(--muted); white-space: nowrap; }
+.s-label i { display: none; }
+.s-del { border: none; background: none; color: var(--muted); font-family: var(--body); font-weight: 400; font-size: .72rem; padding: 2px 0; }
+.s-del.confirm { color: var(--danger); font-weight: 700; }
+.add-session { border-style: dashed; background: transparent; color: var(--muted); font-size: .85rem; padding: 6px 12px; }
+.list-group { display: grid; gap: 8px; }
+/* overview card: where + when on top, the day's totals below */
+.ov-title { margin: 0; }
+.since { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.since-card { display: grid; gap: 2px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 10px; padding: 8px 10px; min-width: 0; font: inherit; color: var(--ink); }
+button.since-card:hover { border-color: var(--c); }
+.since-card .sl { font-weight: 700; font-size: .9rem; color: var(--c); }
+.since-card .sn { font-family: var(--display); font-size: 1.7rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.since-card .sn small { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.since-card .sd { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.since-card.stale .sn { color: var(--danger); }
+.since-card.never .sn { color: var(--muted); }
+@media (max-width: 560px) { .since { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* each session = one card: its place/time bar on top, its exercises right under it */
+#list > .list-group { border: 1px solid var(--line); border-radius: 14px; padding: 10px; gap: 10px; background: color-mix(in srgb, var(--ink) 3%, var(--bg)); }
+#list > .list-group .empty { padding: 14px; }
+.group-session .session { justify-content: flex-start; }
+.group-session .seg-box { background: transparent; }
+.group-session .s-label { justify-items: start; font-size: 1.15rem; color: var(--ink); min-width: 3.4em; }
+.summary-card .sessions { margin-left: 0; justify-items: stretch; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.summary-card .session { justify-content: flex-start; }
+.summary-card .seg-box { flex: 1 1 auto; }
+.summary-card .s-label { justify-items: start; min-width: 3.4em; }
+.add-session-slot { display: grid; }
+.add-session-slot .add-session { width: 100%; padding: 10px; font-size: .9rem; border-radius: 8px; }
+.group-head { display: flex; align-items: baseline; gap: 8px; font-size: .85rem; color: var(--muted); margin-top: 4px; }
+.group-head b { font-family: var(--display); font-size: 1.1rem; color: var(--ink); }
+.list { gap: 14px; }
+.sid-pick[hidden] { display: none; }
+.seg-box { display: flex; flex-wrap: wrap; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; max-width: 100%; }
+.seg { display: grid; gap: 0; padding: 6px 12px 5px; font-size: .66rem; letter-spacing: .08em; color: var(--muted); cursor: pointer; }
+.seg + .seg, .seg-arrow + .seg { border-left: 1px solid var(--line); }
+.seg-place { border-right: 1px solid var(--line); }
+.seg-arrow + .seg { border-left: none; }
+.seg:focus-within { background: var(--bg); }
+.seg select, .seg input[type=time] { border: none; background: transparent; padding: 0; border-radius: 0; color: var(--ink); width: auto; }
+.seg select { font-size: .95rem; font-weight: 700; padding-right: 2px; }
+/* the browser's time field may add 上午/下午 and a clock icon; let it take its natural width */
+.seg input.hm { font-family: var(--display); font-size: 1.35rem; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; width: 3.4em; letter-spacing: .02em; }
+.seg input.hm { cursor: pointer; }
+.hm-pop { position: absolute; z-index: 40; width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, .18); padding: 10px; display: grid; gap: 8px; }
+.hm-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hm-colwrap { display: grid; gap: 4px; }
+.hm-colwrap > span { font-size: .7rem; color: var(--muted); text-align: center; letter-spacing: .08em; }
+.hm-col { height: 200px; overflow-y: auto; display: grid; gap: 2px; align-content: start; scrollbar-width: thin; }
+.hm-col button { border: none; background: none; padding: 6px 0; font-family: var(--display); font-size: 1.15rem; font-variant-numeric: tabular-nums; border-radius: 6px; }
+.hm-col button:hover { background: var(--bg); }
+.hm-col button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.hm-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.hm-foot button { padding: 6px 4px; font-size: .85rem; }
+.seg input.hm::placeholder { color: var(--muted); opacity: .6; }
+.seg input.hm, .seg select { border: none; background: transparent; padding: 0; border-radius: 0; color: var(--ink); }
+.seg input.hm:focus-visible { outline: none; }
+.seg { flex: 1 0 auto; }
+.seg input[type=time]:focus-visible, .seg select:focus-visible { outline: none; }
+.seg-arrow { align-self: center; color: var(--muted); font-size: .9rem; padding: 12px 0 0; }
+.tnow { padding: 0 16px; min-height: 48px; white-space: nowrap; font-size: .9rem; border-radius: 12px; }
+.tnow.end { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+#backToday { justify-self: start; margin-top: 4px; }
+.session { align-items: stretch; }
+@media (max-width: 560px) {
+  .sessions { margin-left: 0; width: 100%; justify-items: stretch; }
+  .session { justify-content: flex-start; width: 100%; }
+  .seg-box { flex: 1 1 100%; }
+  .seg { padding-inline: 10px; }
+  .seg-place { flex-basis: 100%; border-right: none; border-bottom: 1px solid var(--line); }
+  .seg-place + .seg { border-left: none; }
+  .tnow { flex: 1 1 100%; }
+}
+.dayhead-wrap { position: relative; }
+.date-btn { border: none; background: none; padding: 4px 0; text-align: left; display: grid; grid-template-columns: auto auto; column-gap: 8px; align-items: end; }
+.date-btn .caret { grid-row: 1; grid-column: 2; font-style: normal; font-size: .9rem; color: var(--muted); padding-bottom: 4px; transition: transform .15s; }
+.date-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.date-btn span { grid-column: 1 / -1; }
+.date-btn:hover b { color: var(--accent); }
+.cal.pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 10; box-shadow: 0 12px 32px rgba(0, 0, 0, .18); }
+.h2-note { font-family: var(--body); text-transform: none; letter-spacing: 0; font-size: .75rem; font-weight: 400; margin-left: 8px; }
+.prs { display: grid; gap: 14px; }
+.pr-group { display: grid; gap: 6px; }
+.pr-group h3 { margin: 0; font-size: .8rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.pr-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.pr { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; text-align: left; }
+.pr:hover { border-color: var(--accent); }
+.pr .pm { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.pr .pn { font-size: .85rem; font-weight: 700; overflow-wrap: anywhere; }
+.pr .pw { font-family: var(--display); font-size: 1.6rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.pr .pw small { font-size: .75rem; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.pr .pm { font-size: .75rem; color: var(--muted); }
+.pr-hint { font-size: .85rem; color: var(--muted); }
+.pr-hint b { color: var(--ink); font-family: var(--display); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.badge-pr { display: inline-block; font-size: .7rem; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+.sc.best { outline: 2px solid var(--accent); outline-offset: -2px; }
+.form-actions { display: flex; gap: 8px; }
+.form-actions .primary { flex: 1; }
+.form-actions #cancelEdit { padding: 12px 18px; }
+form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.edit-note { font-size: .82rem; color: var(--accent); font-weight: 700; }
+.entry.is-editing { border-color: var(--accent); }
+.entry .edit { border: none; background: none; color: var(--muted); font-size: .8rem; padding: 6px 8px; }
+.entry .edit:hover { color: var(--accent); }
+.primary:disabled { opacity: .45; cursor: not-allowed; }
+
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stat { border-top: 3px solid var(--ink); padding-top: 6px; min-width: 0; }
+.stat b { font-family: var(--display); font-size: 1.8rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; display: block; }
+.stat span { font-size: .75rem; color: var(--muted); }
+
+.list { display: grid; gap: 8px; }
+.entry { display: grid; grid-template-columns: 6px 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 12px 0; overflow: hidden; }
+.entry .bar { align-self: stretch; margin: -12px 0; }
+.entry > div:nth-child(3) { min-width: 0; }
+.entry { align-items: start; }
+.entry .acts { align-self: start; display: flex; align-items: center; }
+.entry .grip { align-self: stretch; border: none; background: none; color: var(--muted); padding: 0 2px; font-size: 1.2rem; line-height: 1; cursor: grab; touch-action: none; margin-left: -6px; }
+.entry .grip:hover { color: var(--ink); }
+.entry.dragging { position: relative; z-index: 2; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); border-color: var(--accent); cursor: grabbing; animation: none; }
+.entry.dragging .grip { cursor: grabbing; color: var(--accent); }
+.entry .name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.entry .tag { font-size: .72rem; font-weight: 700; margin-right: 6px; }
+.entry .detail { color: var(--muted); font-size: .9rem; }
+.entry .detail .num { color: var(--ink); font-family: var(--display); font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.del { border: none; background: none; color: var(--muted); font-size: .8rem; padding: 6px 8px; }
+.del:hover { color: var(--danger); }
+.del.confirm { color: var(--danger); font-weight: 700; }
+.empty { border: 1px dashed var(--line); border-radius: 10px; padding: 20px; text-align: center; color: var(--muted); font-size: .9rem; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* brand mark: dumbbell plates with a heartbeat for a bar — fixed brand colours (#0B5D4B / #C6F24E / white) in both themes */
+.backup { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.backup-note { margin: 0; font-size: .85rem; color: var(--muted); }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.backup-actions button { padding: 10px 18px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 42px; height: 42px; flex-shrink: 0; }
+.top button[aria-expanded="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.link-btn { border: none; background: none; color: var(--accent); padding: 4px 0; font-size: .88rem; justify-self: start; }
+.link-btn.confirm { color: var(--danger); font-weight: 700; }
+.manage { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; gap: 12px; }
+.manage-head { display: flex; justify-content: space-between; align-items: center; }
+.mtabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.mtab { font-size: .9rem; padding: 6px 14px; border-radius: 999px; background: var(--bg); display: inline-flex; align-items: center; gap: 6px; }
+.mtab[aria-selected="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.mlist { display: grid; border-top: 1px solid var(--line); }
+.mrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.mthumb { width: 44px; height: 44px; flex-shrink: 0; padding: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.mthumb img, .ethumb img, .ex-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mthumb.empty-pic { font-size: .62rem; color: var(--muted); border-style: dashed; line-height: 1.1; }
+.mthumb:disabled { cursor: default; }
+.rmpic { border: none; background: none; color: var(--muted); font-size: .78rem; padding: 6px 6px; }
+.rmpic.confirm { color: var(--danger); font-weight: 700; }
+.ethumb { width: 36px; height: 36px; padding: 0; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); margin-left: 8px; vertical-align: middle; flex-shrink: 0; }
+.entry .name { display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; }
+.entry .nm { font-size: 1.2rem; line-height: 1.3; }
+.entry .tag { font-size: .8rem; }
+.ex-photo { justify-self: start; width: 120px; height: 120px; padding: 0; border-radius: 10px; overflow: hidden; }
+.lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
+.lightbox img { max-width: 100%; max-height: 80vh; border-radius: 10px; object-fit: contain; }
+.light-close { background: #fff; color: #17201b; border: none; font-weight: 700; padding: 8px 20px; }
+.mrow .mname { cursor: text; border-radius: 4px; padding: 2px 4px; }
+.mrow .mname:hover { background: var(--bg); }
+.mrow .mname:focus-visible { outline: 2px solid var(--accent); }
+.mrename { flex: 1; min-width: 0; padding: 6px 8px; font-size: .95rem; }
+.mrow .mname { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mrow { background: var(--surface); }
+.mrow .grip { border: none; background: none; color: var(--muted); padding: 4px 6px; font-size: 1.2rem; line-height: 1; cursor: grab; touch-action: none; }
+.mrow .grip:hover { color: var(--ink); }
+.mrow.dragging { position: relative; z-index: 2; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); border-radius: 8px; }
+.mrow.dragging .grip { cursor: grabbing; color: var(--accent); }
+.mrow .moves { display: flex; gap: 2px; flex-shrink: 0; }
+.mrow .moves button { border: none; background: none; color: var(--muted); padding: 6px 8px; font-size: .85rem; }
+.mrow .moves button:disabled { opacity: .3; cursor: default; }
+.mrow .moves .del.confirm { color: var(--danger); font-weight: 700; }
+.madd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.madd .primary { padding: 10px 18px; }
+.status { font-size: .75rem; color: var(--muted); text-align: center; }
+
+@media (max-width: 480px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fields { gap: 8px; }
+}
+@media (prefers-reduced-motion: no-preference) { .entry { animation: in .2s ease-out; } @keyframes in { from { transform: translateY(4px); opacity: .6; } } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">
+      <svg class="logo" viewBox="0 0 1024 1024" aria-hidden="true">
+        <rect width="1024" height="1024" rx="230" fill="#0b5d4b"/>
+        <polyline points="304,512 400,512 432,452 474,600 532,336 580,566 612,512 720,512" fill="none" stroke="#c6f24e" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="#fff">
+          <rect x="150" y="362" width="56" height="300" rx="28"/>
+          <rect x="238" y="287" width="66" height="450" rx="32"/>
+          <rect x="720" y="287" width="66" height="450" rx="32"/>
+          <rect x="818" y="362" width="56" height="300" rx="28"/>
+        </g>
+      </svg>
+      健身紀錄
+    </h1>
+    <button type="button" id="manageBtn" aria-expanded="false" aria-controls="manage">管理動作</button>
+  </header>
+
+  <section class="manage" id="manage" hidden aria-label="管理動作清單">
+    <div class="manage-head">
+      <h2>管理動作</h2>
+      <button type="button" class="link-btn" id="manageClose">完成</button>
+    </div>
+    <div class="mtabs" id="mTabs" role="tablist"></div>
+    <div class="mlist" id="mList"></div>
+    <form class="madd" id="mAdd" autocomplete="off">
+      <input id="mNew" placeholder="新增動作名稱" maxlength="40" aria-label="新增動作名稱">
+      <button type="submit" class="primary" id="mAddBtn">新增</button>
+    </form>
+    <button type="button" class="link-btn" id="mReset">這個部位恢復預設動作</button>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="頁面">
+    <button type="button" role="tab" id="tabLog" aria-controls="viewLog">今日紀錄</button>
+    <button type="button" role="tab" id="tabHist" aria-controls="viewHist">歷史紀錄</button>
+  </nav>
+
+  <div class="view" id="viewLog" role="tabpanel" aria-labelledby="tabLog">
+  <div class="dayhead-wrap">
+    <div class="dayhead">
+      <button type="button" class="date-btn" id="dateBtn" aria-expanded="false" aria-controls="calPop" aria-label="選擇日期">
+        <b id="dayLabel">—</b><span id="dayWeek"></span><i class="caret" aria-hidden="true">▾</i>
+      </button>
+    </div>
+    <button type="button" class="today-btn" id="backToday" hidden>回到今天</button>
+    <div class="cal pop" id="calPop" aria-label="訓練日曆" hidden>
+      <div class="cal-head">
+        <button class="icon-btn" id="mPrev" type="button" aria-label="上個月">‹</button>
+        <b id="mLabel">—</b>
+        <div class="right">
+          <button class="today-btn" id="goToday" type="button">今天</button>
+          <button class="icon-btn" id="mNext" type="button" aria-label="下個月">›</button>
+        </div>
+      </div>
+      <div class="grid" id="wds"></div>
+      <div class="grid" id="cells"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <section class="summary-card" aria-label="訓練總覽">
+    <h2 class="ov-title">訓練總覽</h2>
+    <div class="summary">
+      <div class="stat"><b id="sSets">0</b><span>總組數</span></div>
+      <div class="stat"><b id="sReps">0</b><span>總次數</span></div>
+      <div class="stat"><b id="sVol">0</b><span>總量 kg（不含熱身）</span></div>
+      <div class="stat"><b id="sMin">0</b><span>有氧分鐘</span></div>
+      <div class="stat"><b id="sDur">—</b><span id="sDurLab">訓練時間</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="list" id="list"></div>
+  </section>
+
+  <button type="button" class="primary open-form" id="openForm" aria-controls="addForm" aria-expanded="false">＋ 新增動作</button>
+
+  <form class="add" id="addForm" autocomplete="off" hidden>
+    <div class="form-head">
+      <b id="formTitle">新增動作</b>
+      <button type="button" class="link-btn" id="closeForm">收起</button>
+    </div>
+    <div class="edit-note" id="editNote" hidden></div>
+    <label class="sid-pick" id="sidPick" hidden>場次<select id="sidSel"></select></label>
+    <div class="pick">
+      <label>1　部位
+        <span class="sel-wrap"><i class="swatch" id="catSwatch"></i><select id="catSel"></select></span>
+      </label>
+      <label>2　動作
+        <select id="exSel" disabled></select>
+      </label>
+    </div>
+    <input id="customName" placeholder="輸入自訂動作名稱" maxlength="40" aria-label="自訂動作名稱" hidden>
+    <button type="button" class="ex-photo" id="exPhoto" hidden aria-label="放大照片"><img alt=""></button>
+    <div class="pr-hint" id="prHint" hidden></div>
+    <div class="step">
+      <div class="step-label">3　填數字</div>
+      <div class="sets" id="strengthFields">
+        <div class="set-head" aria-hidden="true"><span>組</span><span>類型</span><span>次數</span><span>重量 kg</span><span></span></div>
+        <div id="setRows" class="set-rows"></div>
+        <button type="button" class="add-set" id="addSet">＋ 新增一組</button>
+      </div>
+      <div class="fields two" id="cardioFields" hidden>
+        <label>時間（分鐘）<input id="exMin" type="number" inputmode="numeric" min="1" max="600" value="30"></label>
+        <label>距離 km<input id="exKm" type="number" inputmode="decimal" min="0" max="500" step="0.1" placeholder="可不填"></label>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" id="cancelEdit" hidden>取消</button>
+      <button type="submit" class="primary" id="submitBtn" disabled>加入這天的紀錄</button>
+    </div>
+  </form>
+
+  <div id="addSessionSlot" class="add-session-slot"></div>
+  </div>
+
+  <div class="view" id="viewHist" role="tabpanel" aria-labelledby="tabHist" hidden>
+  <section aria-label="距離上次訓練">
+    <h2>距離上次練<span class="h2-note">超過 7 天會標紅・點卡片看那天</span></h2>
+    <div class="since" id="since"></div>
+  </section>
+
+  <div class="cal" aria-label="訓練日曆">
+    <div class="cal-head">
+      <button class="icon-btn" id="hPrev" type="button" aria-label="上個月">‹</button>
+      <b id="hLabel">—</b>
+      <div class="right">
+        <button class="today-btn" id="hToday" type="button">本月</button>
+        <button class="icon-btn" id="hNext" type="button" aria-label="下個月">›</button>
+      </div>
+    </div>
+    <div class="grid" id="hWds"></div>
+    <div class="grid" id="hCells"></div>
+    <div class="legend" id="hLegend"></div>
+  </div>
+
+  <section aria-label="個人最佳">
+    <h2>個人最佳重量<span class="h2-note">單組 8 下以上才算・點卡片看那天</span></h2>
+    <div class="prs" id="prs"></div>
+  </section>
+
+  <section class="backup" aria-label="備份與轉移">
+    <h2>備份與轉移</h2>
+    <p class="backup-note">把所有訓練紀錄和動作清單存成一個檔案；換手機、換版本時再用「匯入」放回來。照片不會包含在備份裡。</p>
+    <div class="backup-actions">
+      <button type="button" class="primary" id="exportBtn">匯出備份</button>
+      <button type="button" id="importBtn">匯入備份</button>
+    </div>
+    <input type="file" id="importInput" accept=".json,application/json" hidden>
+  </section>
+  </div>
+
+  <div class="hm-pop" id="hmPop" role="dialog" aria-label="選擇時間" hidden>
+    <div class="hm-cols">
+      <div class="hm-colwrap"><span>時</span><div class="hm-col" id="hmH"></div></div>
+      <div class="hm-colwrap"><span>分</span><div class="hm-col" id="hmM"></div></div>
+    </div>
+    <div class="hm-foot">
+      <button type="button" id="hmNow">現在</button>
+      <button type="button" id="hmClear">清除</button>
+      <button type="button" class="primary" id="hmDone">完成</button>
+    </div>
+  </div>
+
+  <input type="file" id="photoInput" accept="image/*" hidden>
+  <div class="lightbox" id="lightbox" hidden>
+    <img id="lightImg" alt="動作照片">
+    <button type="button" id="lightClose" class="light-close">關閉</button>
+  </div>
+
+  <p class="status" id="status">載入中…</p>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const CATS = [
+    { key: "chest", label: "胸", ex: ["臥推", "上斜臥推", "啞鈴臥推", "啞鈴飛鳥", "蝴蝶機夾胸", "繩索夾胸", "雙槓撐體", "伏地挺身"] },
+    { key: "shoulder", label: "肩", ex: ["槓鈴肩推", "啞鈴肩推", "阿諾推舉", "側平舉", "前平舉", "反向飛鳥", "面拉", "聳肩"] },
+    { key: "legs", label: "腿", ex: ["深蹲", "前蹲", "腿推", "羅馬尼亞硬舉", "保加利亞分腿蹲", "弓箭步", "腿伸展", "腿後彎舉", "提踵"] },
+    { key: "back", label: "背", ex: ["硬舉", "引體向上", "滑輪下拉", "槓鈴划船", "啞鈴划船", "坐姿划船", "T槓划船", "直臂下拉"] },
+    { key: "arms", label: "手", ex: ["二頭彎舉", "錘式彎舉", "牧師椅彎舉", "三頭下壓", "過頭三頭伸展", "仰臥三頭伸展", "窄握臥推", "腕彎舉"] },
+    { key: "cardio", label: "有氧", ex: ["跑步機", "戶外跑步", "飛輪", "划船機", "橢圓機", "爬樓梯機", "跳繩", "游泳"] },
+  ];
+  const CAT = Object.fromEntries(CATS.map((c) => [c.key, c]));
+  const catColor = (k) => "var(--c-" + (CAT[k] ? k : "other") + ")";
+  const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
+  const LS_KEY = "liftlog.days";
+  const LS_EX_KEY = "liftlog.exercises";
+  let exMap = {};         // { chest: ["臥推", ...] } — overrides the defaults per body part once edited
+  let exImages = {};      // { "chest|腿推": assetId } — one photo per exercise, to tell machines apart
+  let assets = null;      // photo uploads; null when this view can't store files
+  const imgKey = (cat, name) => cat + "|" + name;
+  const imgOf = (cat, name) => { const id = exImages[imgKey(cat, name)]; return id ? "/_blob/" + id : null; };
+  let mCat = "chest";     // body part open in the manage panel
+  const exList = (cat) => exMap[cat] || CAT[cat].ex;
+  const KINDS = [["work", "正式"], ["warm", "熱身"], ["drop", "遞減"]];
+  const KIND_LABEL = Object.fromEntries(KINDS);
+  const defaultRows = () => Array.from({ length: 4 }, () => ({ kind: "work", reps: 10, weight: 0 }));
+  let setRows = defaultRows();
+  // older entries stored one sets/reps/weight triple; expand them to per-set rows
+  const setsOf = (e) => e.list || Array.from({ length: e.sets || 0 }, () => ({ kind: "work", reps: e.reps, weight: e.weight || 0 }));
+  // a drop set is one set with extra lighter stages in `drops`
+  const cloneSet = (s) => ({ kind: s.kind, reps: s.reps, weight: s.weight, drops: s.kind === "drop" && s.drops && s.drops.length ? s.drops.map((d) => ({ ...d })) : undefined });
+  const stagesOf = (s) => [{ reps: s.reps, weight: s.weight }].concat(s.kind === "drop" && s.drops ? s.drops : []);
+
+  let days = {};
+  let current = ymd(new Date());
+  let viewMonth = current.slice(0, 7);
+  let store = null;
+  let selCat = null, selEx = null;
+
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function parse(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d || 1); }
+  function fmtNum(n) { return Math.round(n).toLocaleString("zh-TW"); }
+  const entriesOf = (k) => (days[k] && days[k].entries) || [];
+
+  // ---------- storage: private db subtree, localStorage fallback ----------
+  function localStore() {
+    try { days = JSON.parse(localStorage.getItem(LS_KEY) || "{}") || {}; } catch (e) { days = {}; }
+    try { exMap = JSON.parse(localStorage.getItem(LS_EX_KEY) || "{}") || {}; } catch (e) { exMap = {}; }
+    const persist = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(days)); } catch (e) {} };
+    $("status").textContent = "紀錄只存在這個瀏覽器";
+    return {
+      save: async () => persist(), remove: async () => persist(),
+      saveEx: async () => { try { localStorage.setItem(LS_EX_KEY, JSON.stringify(exMap)); } catch (e) {} },
+    };
+  }
+
+  async function initStore() {
+    const c = window.claude;
+    if (!c || !c.use) return localStore();
+    const [db, user, as] = await Promise.all([c.use("db"), c.use("user"), c.use("assets")]);
+    assets = db ? as : null;
+    const uid = user ? await user.id() : null;
+    if (!db || !uid) return localStore();
+    const col = db.collection("data/users/" + uid);
+    col.orderBy("date", "desc").limit(1000).onSnapshot((snap) => {
+      const next = {};
+      snap.docs.forEach((d) => { const v = d.data(); if (v && v.date) next[v.date] = { ...v, entries: (v.entries || []).slice() }; });
+      days = next;
+      $("status").textContent = "已同步到你的帳號（只有你看得到）";
+      render();
+    }, () => { $("status").textContent = "同步中斷，重新整理頁面再試一次"; });
+    // exercise lists live in one settings doc beside the day docs (it has no `date`, so the day view skips it)
+    const settings = col.doc("settings");
+    settings.onSnapshot((snap) => {
+      const v = snap.exists ? snap.data() : null;
+      exMap = v && v.exercises ? Object.fromEntries(Object.entries(v.exercises).map(([k, a]) => [k, (a || []).slice()])) : {};
+      exImages = v && v.images ? { ...v.images } : {};
+      render();
+    }, () => {});
+    return {
+      save: (date, doc) => col.doc(date).set(doc),
+      remove: (date) => col.doc(date).delete(),
+      saveEx: () => settings.set({ exercises: exMap, images: exImages }),
+    };
+  }
+
+  let exSaving = Promise.resolve();
+  function commitEx() {
+    exSaving = exSaving.then(() => store.saveEx()).catch(() => { $("status").textContent = "動作清單儲存失敗，請再試一次"; });
+  }
+
+  async function commit(date) {
+    const doc = days[date];
+    try {
+      if (doc && (doc.entries.length || doc.start || doc.end || doc.place || (doc.sessions && doc.sessions.length))) await store.save(date, doc);
+      else { delete days[date]; await store.remove(date); }
+    } catch (e) {
+      $("status").textContent = e && e.code === "quota_exceeded" ? "儲存空間已滿，請刪除舊紀錄" : "儲存失敗，請再試一次";
+    }
+  }
+
+  // ---------- calendar ----------
+  const monthLabel = (m) => { const d = parse(m + "-01"); return d.getFullYear() + " 年 " + (d.getMonth() + 1) + " 月"; };
+
+  function renderCalendar() {
+    $("mLabel").textContent = monthLabel(viewMonth);
+    $("cells").replaceChildren(...calCells(viewMonth));
+    const today = ymd(new Date());
+    $("goToday").hidden = current === today && viewMonth === today.slice(0, 7);
+    renderHistCal();
+  }
+
+  // the history page's own always-open calendar
+  let histMonth = ymd(new Date()).slice(0, 7);
+  function renderHistCal() {
+    $("hLabel").textContent = monthLabel(histMonth);
+    $("hCells").replaceChildren(...calCells(histMonth));
+    $("hToday").hidden = histMonth === ymd(new Date()).slice(0, 7);
+  }
+  function shiftHistMonth(n) { const d = parse(histMonth + "-01"); d.setMonth(d.getMonth() + n); histMonth = ymd(d).slice(0, 7); renderHistCal(); }
+
+  function calCells(month) {
+    const first = parse(month + "-01");
+    const today = ymd(new Date());
+    const start = new Date(first); start.setDate(1 - first.getDay());
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      if (i === 35 && d.getMonth() !== first.getMonth()) break;
+      const k = ymd(d);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cell" + (d.getMonth() !== first.getMonth() ? " out" : "") + (k === today ? " today" : "") + (k === current ? " sel" : "");
+      const cats = [...new Set(entriesOf(k).map((e) => e.cat || "other"))];
+      b.setAttribute("aria-label", (d.getMonth() + 1) + "月" + d.getDate() + "日" + (cats.length ? "，練了" + cats.map((c) => (CAT[c] ? CAT[c].label : "其他")).join("、") : ""));
+      b.innerHTML = '<span class="n">' + d.getDate() + '</span><span class="tags"></span>';
+      if (cats.length) {
+        b.classList.add("trained");
+        b.style.setProperty("--tint", catColor(cats[0]));
+        const tags = b.querySelector(".tags");
+        cats.slice(0, 3).forEach((c) => {
+          const s = document.createElement("span");
+          s.className = "ctag"; s.style.background = catColor(c);
+          s.textContent = CAT[c] ? CAT[c].label : "其他";
+          tags.append(s);
+        });
+        if (cats.length > 3) { const s = document.createElement("span"); s.className = "ctag more"; s.textContent = "+" + (cats.length - 3); tags.append(s); }
+      }
+      b.addEventListener("click", () => openDay(k));
+      cells.push(b);
+    }
+    return cells;
+  }
+
+  // ---------- days since each body part was last trained ----------
+  function renderSince() {
+    const today = ymd(new Date()), t0 = parse(today);
+    const last = {};
+    Object.keys(days).forEach((k) => {
+      if (k > today) return;
+      entriesOf(k).forEach((e) => { if (CAT[e.cat] && (!last[e.cat] || k > last[e.cat])) last[e.cat] = k; });
+    });
+    $("since").replaceChildren(...CATS.map((c) => {
+      const k = last[c.key];
+      const n = k ? Math.round((t0 - parse(k)) / 86400000) : null;
+      const card = document.createElement(k ? "button" : "div");
+      if (k) { card.type = "button"; card.addEventListener("click", () => openDay(k)); card.setAttribute("aria-label", c.label + "：上次 " + shortDate(k) + "，點一下看那天"); }
+      card.className = "since-card" + (n === null ? " never" : n >= 7 ? " stale" : "");
+      card.style.setProperty("--c", catColor(c.key));
+      card.innerHTML = '<span class="sl"></span><span class="sn"></span><span class="sd"></span>';
+      card.querySelector(".sl").textContent = c.label;
+      if (n === null) { card.querySelector(".sn").textContent = "—"; card.querySelector(".sd").textContent = "還沒練過"; }
+      else {
+        card.querySelector(".sn").innerHTML = n === 0 ? "今天" : n + "<small> 天</small>";
+        card.querySelector(".sd").textContent = n === 0 ? "今天有練" : "上次 " + shortDate(k).slice(5);
+      }
+      return card;
+    }));
+  }
+
+  function shiftMonth(n) { const d = parse(viewMonth + "-01"); d.setMonth(d.getMonth() + n); viewMonth = ymd(d).slice(0, 7); renderCalendar(); }
+
+  // ---------- form ----------
+  const CUSTOM = "__custom__";
+  function opt(value, text, disabled) { const o = document.createElement("option"); o.value = value; o.textContent = text; if (disabled) o.disabled = true; return o; }
+
+  // which session a new entry goes into: the one chosen in the form, else the latest
+  let formSid = null;
+  function pickSid(date) {
+    const ss = sessionsOf(date);
+    return ss.some((s) => s.id === formSid) ? formSid : ss[ss.length - 1].id;
+  }
+  function renderSidPick() {
+    const ss = sessionsOf(editing ? editing.date : current);
+    $("sidPick").hidden = ss.length < 2;
+    if (ss.length < 2) return;
+    $("sidSel").replaceChildren(...ss.map((s, i) => opt(s.id, "第 " + (i + 1) + " 場" + (s.place ? "・" + s.place : ""))));
+    $("sidSel").value = pickSid(editing ? editing.date : current);
+  }
+
+  function renderPicker() {
+    renderSidPick();
+    const catSel = $("catSel"), exSel = $("exSel");
+    catSel.replaceChildren(opt("", "選擇部位", true), ...CATS.map((c) => opt(c.key, c.label)));
+    catSel.value = selCat || "";
+    $("catSwatch").style.background = selCat ? catColor(selCat) : "var(--line)";
+
+    if (!selCat) {
+      exSel.replaceChildren(opt("", "先選部位", true));
+      exSel.value = ""; exSel.disabled = true;
+    } else {
+      const list = exList(selCat);
+      if (selEx && !list.includes(selEx)) selEx = null;
+      exSel.replaceChildren(opt("", "選擇動作", true), ...list.map((n) => opt(n, n)), opt(CUSTOM, "＋ 自訂動作…"));
+      exSel.disabled = false;
+      exSel.value = selEx === null ? "" : selEx === "" ? CUSTOM : selEx;
+    }
+    $("customName").hidden = selEx !== "";
+    const cardio = selCat === "cardio";
+    $("strengthFields").hidden = cardio;
+    $("cardioFields").hidden = !cardio;
+    syncStrengthInputs();
+    updateSubmit();
+  }
+
+  function chosenName() { return selEx === "" ? $("customName").value.trim() : selEx; }
+  function updateSubmit() { $("submitBtn").disabled = !(store && selCat && chosenName()); renderPrHint(); }
+
+  function fillLast(name) {
+    const keys = Object.keys(days).sort().reverse();
+    for (const k of keys) {
+      const hit = entriesOf(k).slice().reverse().find((x) => x.name === name);
+      if (!hit) continue;
+      if (hit.cat === "cardio") { if (!cardioTouched) { $("exMin").value = hit.minutes || 30; $("exKm").value = hit.km || ""; } }
+      else if (!setsTouched) { setRows = setsOf(hit).map(cloneSet); renderSets(); }
+      return;
+    }
+    if (selCat !== "cardio" && !setsTouched) { setRows = defaultRows(); renderSets(); }
+  }
+
+  // numbers typed before picking an exercise must survive the pick; only prefill untouched fields
+  let setsTouched = false, cardioTouched = false;
+  $("strengthFields").addEventListener("input", () => { setsTouched = true; });
+  $("strengthFields").addEventListener("click", (ev) => { if (ev.target.closest("button")) setsTouched = true; });
+  $("cardioFields").addEventListener("input", () => { cardioTouched = true; });
+  const resetTouched = () => { setsTouched = false; cardioTouched = false; };
+
+  function dropRow(s, d, j) {
+    const row = document.createElement("div");
+    row.className = "set-row drop-stage";
+    row.innerHTML = '<span class="idx">↳</span><span class="stage-lab">再減</span>' +
+      '<input type="number" inputmode="numeric" min="1" max="500" required aria-label="遞減次數">' +
+      '<input type="number" inputmode="decimal" min="0.5" max="1000" step="0.5" required aria-label="遞減重量 kg">' +
+      '<button type="button" class="rm-set" aria-label="刪除這段遞減">×</button>';
+    const [reps, weight] = row.querySelectorAll("input");
+    reps.value = d.reps || ""; weight.value = d.weight || "";
+    reps.addEventListener("input", () => { d.reps = parseInt(reps.value, 10) || 0; });
+    weight.addEventListener("input", () => { d.weight = parseFloat(weight.value) || 0; });
+    const rm = row.querySelector(".rm-set");
+    rm.disabled = s.drops.length === 1;
+    rm.addEventListener("click", () => { s.drops.splice(j, 1); renderSets(); });
+    return row;
+  }
+
+  const lighter = (w) => (w > 0 ? Math.max(0.5, Math.round(w * 0.8 * 2) / 2) : 0);
+
+  function renderSets() {
+    const rows = setRows.map((s, i) => {
+      const block = document.createElement("div");
+      block.className = "set-block";
+      const row = document.createElement("div");
+      row.className = "set-row " + s.kind;
+      row.innerHTML = '<span class="idx"></span><select aria-label="類型"></select>' +
+        '<input type="number" inputmode="numeric" min="1" max="500" required aria-label="次數">' +
+        '<input type="number" inputmode="decimal" min="0.5" max="1000" step="0.5" required aria-label="重量 kg">' +
+        '<button type="button" class="rm-set" aria-label="刪除這組">×</button>';
+      row.querySelector(".idx").textContent = i + 1;
+      const [kind, reps, weight] = [row.querySelector("select"), ...row.querySelectorAll("input")];
+      kind.id = "setKind" + i; reps.id = "setReps" + i; weight.id = "setWeight" + i;
+      kind.replaceChildren(...KINDS.map(([v, t]) => opt(v, t)));
+      kind.value = s.kind; reps.value = s.reps || ""; weight.value = s.weight || "";
+      kind.addEventListener("change", () => {
+        s.kind = kind.value;
+        if (s.kind === "drop" && !(s.drops && s.drops.length)) s.drops = [{ reps: s.reps, weight: lighter(s.weight) }];
+        renderSets();
+        const k = $("setKind" + i); if (k) k.focus();
+      });
+      reps.addEventListener("input", () => { s.reps = parseInt(reps.value, 10) || 0; });
+      weight.addEventListener("input", () => { s.weight = parseFloat(weight.value) || 0; });
+      const rm = row.querySelector(".rm-set");
+      rm.disabled = setRows.length === 1;
+      rm.addEventListener("click", () => { setRows.splice(i, 1); renderSets(); });
+      block.append(row);
+      if (s.kind === "drop") {
+        if (!(s.drops && s.drops.length)) s.drops = [{ reps: s.reps, weight: lighter(s.weight) }];
+        s.drops.forEach((d, j) => block.append(dropRow(s, d, j)));
+        const more = document.createElement("button");
+        more.type = "button"; more.className = "more-drop"; more.textContent = "＋ 再減一次";
+        more.addEventListener("click", () => {
+          const last = s.drops[s.drops.length - 1];
+          s.drops.push({ reps: last.reps, weight: lighter(last.weight) });
+          renderSets();
+        });
+        block.append(more);
+      }
+      return block;
+    });
+    $("setRows").replaceChildren(...rows);
+    syncStrengthInputs();
+  }
+
+  // hidden strength inputs must not block a cardio submit with their `required`
+  function syncStrengthInputs() {
+    $("strengthFields").querySelectorAll("input, select").forEach((el) => { el.disabled = selCat === "cardio"; });
+  }
+
+  // ---------- day view ----------
+  function renderDay() {
+    const d = parse(current), today = ymd(new Date());
+    $("dayLabel").textContent = (d.getMonth() + 1) + " 月 " + d.getDate() + " 日";
+    $("dayWeek").textContent = d.getFullYear() + " 年・星期" + WEEK[d.getDay()] + (current === today ? "・今天" : "");
+    $("backToday").hidden = current === today;
+    $("tabLog").textContent = current === today ? "今日紀錄" : (d.getMonth() + 1) + "/" + d.getDate() + " 紀錄";
+
+    const entries = entriesOf(current);
+    let sets = 0, reps = 0, vol = 0, mins = 0;
+    entries.forEach((e) => {
+      if (e.cat === "cardio") mins += e.minutes || 0;
+      else setsOf(e).forEach((s) => {
+        sets += 1;
+        stagesOf(s).forEach((st) => { reps += st.reps; if (s.kind !== "warm") vol += st.reps * (st.weight || 0); });
+      });
+    });
+    $("sSets").textContent = fmtNum(sets); $("sReps").textContent = fmtNum(reps);
+    $("sVol").textContent = fmtNum(vol); $("sMin").textContent = fmtNum(mins);
+
+    if (typingInSession()) return;   // the list holds the session time fields; don't wipe them mid-edit
+    const list = $("list");
+    list.replaceChildren();
+    // one group per session, headed by that session's place/time controls (filled by renderSession);
+    // drag reorders within a session
+    const ssn = sessionsOf(current), multi = ssn.length > 1, groups = {};
+    ssn.forEach((s) => {
+      const g = document.createElement("div");
+      g.className = "list-group";
+      const h = document.createElement("div");
+      h.className = "group-session";
+      h.dataset.sid = s.id;
+      const body = document.createElement("div");
+      body.className = "list-group";
+      g.append(h, body);
+      groups[s.id] = body;
+      if (!entries.some((e) => sidOf(e, ssn) === s.id)) {
+        const p = document.createElement("div"); p.className = "empty";
+        p.textContent = multi ? "這一場還沒有動作。" : "這天還沒有紀錄。按下面的「＋ 新增動作」開始記錄。";
+        body.append(p);
+      }
+      list.append(g);
+    });
+    entries.forEach((e) => {
+      const group = groups[sidOf(e, ssn)];
+      const row = document.createElement("div");
+      row.className = "entry";
+      row.innerHTML = '<div class="bar"></div><div><div class="name"><span class="tag"></span><span class="nm"></span></div><div class="detail"></div></div><div class="acts"><button class="edit" type="button">編輯</button><button class="del" type="button">刪除</button></div>';
+      row.dataset.id = e.id;
+      if (editing && editing.id === e.id && editing.date === current) row.classList.add("is-editing");
+      row.querySelector(".edit").addEventListener("click", () => startEdit(e));
+      const grip = document.createElement("button");
+      grip.type = "button"; grip.className = "grip"; grip.textContent = "⠿";
+      grip.setAttribute("aria-label", "拖曳調整順序（也可用上下方向鍵）");
+      row.querySelector(".bar").after(grip);
+      enableDrag(row, grip, group);
+      const col = catColor(e.cat);
+      row.querySelector(".bar").style.background = col;
+      const tag = row.querySelector(".tag"); tag.style.color = col; tag.textContent = CAT[e.cat] ? CAT[e.cat].label : "其他";
+      row.querySelector(".nm").textContent = e.name;
+      const pic = imgOf(e.cat, e.name);
+      if (pic) {
+        const t = document.createElement("button");
+        t.type = "button"; t.className = "ethumb"; t.setAttribute("aria-label", "放大「" + e.name + "」的照片");
+        const im = document.createElement("img"); im.src = pic; im.alt = ""; im.onerror = () => t.remove();
+        t.append(im); t.addEventListener("click", () => showPhoto(pic));
+        row.querySelector(".nm").after(t);
+      }
+      if (PR.newIn.has(e.id)) { const b = document.createElement("span"); b.className = "badge-pr"; b.textContent = "新紀錄"; row.querySelector(".name").append(b); }
+      const detail = row.querySelector(".detail");
+      if (e.cat === "cardio") {
+        detail.innerHTML = '<span class="num">' + (e.minutes || 0) + "</span> 分鐘" + (e.km ? ' ・ <span class="num">' + e.km + "</span> km" : "");
+      } else {
+        const ss = setsOf(e);
+        const top = Math.max(0, ...ss.map((s) => s.weight || 0));
+        detail.innerHTML = '<span class="num">' + ss.length + "</span> 組" + (top ? ' ・ 最重 <span class="num">' + top + "</span> kg" : "") + '<div class="setchips"></div>';
+        detail.querySelector(".setchips").replaceChildren(...ss.map((s, i) => {
+          const c = document.createElement("div");
+          c.className = "sc " + s.kind + (PR.newIn.get(e.id) === i ? " best" : "");
+          c.innerHTML = '<span class="lab">第 ' + (i + 1) + " 組" + (s.kind !== "work" ? "・" + KIND_LABEL[s.kind] : "") + "</span>" +
+            '<span class="wr"><span class="w">' + (s.weight ? s.weight + "<small>kg</small>" : "—") + "</span>" +
+            '<span class="r">× ' + s.reps + " 下</span></span>" +
+            (s.kind === "drop" && s.drops ? s.drops.map((d) => '<span class="r dr">↓ ' + d.weight + "kg × " + d.reps + "</span>").join("") : "");
+          return c;
+        }));
+      }
+      const del = row.querySelector(".del");
+      del.addEventListener("click", () => {
+        if (!del.classList.contains("confirm")) { del.classList.add("confirm"); del.textContent = "確定刪除？"; setTimeout(() => { del.classList.remove("confirm"); del.textContent = "刪除"; }, 3000); return; }
+        days[current].entries = days[current].entries.filter((x) => x.id !== e.id);
+        commit(current); render();
+      });
+      group.append(row);
+    });
+  }
+
+  // ---------- manage exercises ----------
+  function setList(cat, list) { if (!store) return; exMap[cat] = list; commitEx(); render(); }
+
+  function armConfirm(btn, label, confirmLabel) {
+    if (btn.classList.contains("confirm")) return true;
+    btn.classList.add("confirm"); btn.textContent = confirmLabel;
+    setTimeout(() => { btn.classList.remove("confirm"); btn.textContent = label; }, 3000);
+    return false;
+  }
+
+  let renaming = false;   // keep live updates from wiping a half-typed name
+  function renderManage() {
+    if ($("manage").hidden || renaming) return;
+    $("mTabs").replaceChildren(...CATS.map((c) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "mtab"; b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(c.key === mCat));
+      b.innerHTML = '<i class="dot"></i>'; b.firstChild.style.background = catColor(c.key); b.append(c.label);
+      b.addEventListener("click", () => { mCat = c.key; renderManage(); });
+      return b;
+    }));
+    const list = exList(mCat);
+    const rows = list.map((n, i) => {
+      const row = document.createElement("div");
+      row.className = "mrow";
+      row.dataset.id = n;
+      row.innerHTML = '<button type="button" class="grip" aria-label="拖曳調整順序（也可用上下方向鍵）">⠿</button><button type="button" class="mthumb"></button><span class="mname"></span><div class="moves"><button type="button" class="rmpic" hidden>移除照片</button><button type="button" class="del">刪除</button></div>';
+      const nameEl = row.querySelector(".mname");
+      nameEl.textContent = n;
+      nameEl.tabIndex = 0; nameEl.setAttribute("role", "button"); nameEl.title = "點一下改名稱";
+      const startRename = () => {
+        if (!store) return;
+        const inp = document.createElement("input");
+        inp.className = "mrename"; inp.value = n; inp.maxLength = 40; inp.setAttribute("aria-label", "新的動作名稱");
+        nameEl.replaceWith(inp); inp.focus(); inp.select();
+        renaming = true;
+        let done = false;
+        const finish = (save) => {
+          if (done) return; done = true; renaming = false;
+          const v = inp.value.trim();
+          if (save && v && v !== n) renameExercise(mCat, n, v); else renderManage();
+        };
+        inp.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") { ev.preventDefault(); finish(true); }
+          else if (ev.key === "Escape") { ev.stopPropagation(); finish(false); }
+        });
+        inp.addEventListener("blur", () => finish(true));
+      };
+      nameEl.addEventListener("click", startRename);
+      nameEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); startRename(); } });
+      const thumb = row.querySelector(".mthumb"), pic = imgOf(mCat, n), rmpic = row.querySelector(".rmpic");
+      if (pic) {
+        const im = document.createElement("img"); im.src = pic; im.alt = ""; thumb.append(im);
+        thumb.setAttribute("aria-label", "更換「" + n + "」的照片");
+        rmpic.hidden = !assets;
+      } else {
+        thumb.textContent = "＋照片"; thumb.classList.add("empty-pic");
+        thumb.setAttribute("aria-label", "幫「" + n + "」加照片");
+      }
+      thumb.hidden = !assets && !pic;
+      thumb.disabled = !assets;
+      thumb.addEventListener("click", () => pickPhoto(mCat, n));
+      rmpic.addEventListener("click", () => { if (armConfirm(rmpic, "移除照片", "確定移除？")) removePhoto(mCat, n); });
+      const del = row.querySelector(".del");
+      del.addEventListener("click", () => {
+        if (!armConfirm(del, "刪除", "確定？")) return;
+        if (exImages[imgKey(mCat, n)]) removePhoto(mCat, n, true);
+        setList(mCat, list.filter((x) => x !== n));
+      });
+      enableDrag(row, row.querySelector(".grip"), $("mList"), () => {
+        const names = [...$("mList").children].map((r) => r.dataset.id).filter(Boolean);
+        if (names.join("\n") !== list.join("\n")) setList(mCat, names);
+      });
+      return row;
+    });
+    if (!rows.length) { const p = document.createElement("div"); p.className = "empty"; p.textContent = "這個部位目前沒有動作，在下面新增一個。"; rows.push(p); }
+    $("mList").replaceChildren(...rows);
+    $("mNew").placeholder = "新增「" + CAT[mCat].label + "」的動作";
+  }
+
+  // rename in the list, move its photo, and relabel past records so history and bests stay together
+  function renameExercise(cat, from, to) {
+    const list = exList(cat);
+    if (list.includes(to)) { $("status").textContent = "「" + to + "」已經存在，請換一個名稱"; renderManage(); return; }
+    exMap[cat] = list.map((x) => (x === from ? to : x));
+    const oldKey = imgKey(cat, from);
+    if (exImages[oldKey]) { exImages[imgKey(cat, to)] = exImages[oldKey]; delete exImages[oldKey]; }
+    commitEx();
+    Object.keys(days).forEach((date) => {
+      const es = entriesOf(date);
+      if (!es.some((e) => e.cat === cat && e.name === from)) return;
+      days[date].entries = es.map((e) => (e.cat === cat && e.name === from ? { ...e, name: to } : e));
+      commit(date);
+    });
+    if (selCat === cat && selEx === from) selEx = to;
+    $("status").textContent = "已改名為「" + to + "」";
+    render();
+  }
+
+  function toggleManage(open) {
+    $("manage").hidden = !open;
+    $("manageBtn").setAttribute("aria-expanded", String(open));
+    if (open) { if (selCat) mCat = selCat; renderManage(); }
+  }
+
+  // ---------- personal bests: heaviest non-warm-up set of 8+ reps ----------
+  const PR_MIN_REPS = 8;
+  let PR = { best: {}, newIn: new Map() };   // best[name] = {weight, reps, date, cat}; newIn: entryId -> set index that beat an earlier best
+
+  function computePRs() {
+    const best = {}, newIn = new Map();
+    Object.keys(days).sort().forEach((date) => entriesOf(date).forEach((e) => {
+      if (e.cat === "cardio") return;
+      setsOf(e).forEach((s, i) => {
+        if (s.kind === "warm" || s.reps < PR_MIN_REPS || !(s.weight > 0)) return;
+        const b = best[e.name];
+        if (!b || s.weight > b.weight || (s.weight === b.weight && s.reps > b.reps)) {
+          if (b && s.weight > b.weight) newIn.set(e.id, i);
+          best[e.name] = { weight: s.weight, reps: s.reps, date, cat: e.cat };
+        }
+      });
+    }));
+    PR = { best, newIn };
+  }
+
+  const shortDate = (k) => { const d = parse(k); return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate(); };
+
+  function renderPRs() {
+    const box = $("prs");
+    const names = Object.keys(PR.best);
+    if (!names.length) {
+      const p = document.createElement("div");
+      p.className = "empty";
+      p.textContent = "還沒有紀錄。有負重、做到 8 下以上的正式組或遞減組，就會出現在這裡。";
+      box.replaceChildren(p);
+      return;
+    }
+    const groups = [...CATS.map((c) => c.key), "other"].map((cat) => {
+      const inCat = names.filter((n) => (CAT[PR.best[n].cat] ? PR.best[n].cat : "other") === cat);
+      if (!inCat.length) return null;
+      const order = CAT[cat] ? exList(cat) : [];
+      inCat.sort((a, b) => ((order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999)) || a.localeCompare(b, "zh-Hant"));
+      const g = document.createElement("div");
+      g.className = "pr-group";
+      g.innerHTML = '<h3><i class="dot"></i><span></span></h3><div class="pr-rows"></div>';
+      g.querySelector(".dot").style.background = catColor(cat);
+      g.querySelector("h3 span").textContent = CAT[cat] ? CAT[cat].label : "其他";
+      g.querySelector(".pr-rows").replaceChildren(...inCat.map((n) => {
+        const b = PR.best[n];
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "pr";
+        card.setAttribute("aria-label", n + " 最佳 " + b.weight + " 公斤，跳到 " + shortDate(b.date));
+        card.addEventListener("click", () => openDay(b.date));
+        card.innerHTML = '<span class="pn"></span><span class="pw">' + b.weight + '<small>kg</small></span><span class="pm"></span>';
+        card.querySelector(".pn").textContent = n;
+        card.querySelector(".pm").textContent = "× " + b.reps + " 下・" + shortDate(b.date);
+        return card;
+      }));
+      return g;
+    }).filter(Boolean);
+    box.replaceChildren(...groups);
+  }
+
+  // ---------- exercise photos ----------
+  let photoTarget = null;
+
+  function pickPhoto(cat, name) {
+    if (!assets) return;
+    photoTarget = { cat, name };
+    $("photoInput").value = "";
+    $("photoInput").click();
+  }
+
+  // phone photos are large; shrink to ~1000px JPEG before upload
+  async function shrink(file) {
+    try {
+      const bmp = await createImageBitmap(file);
+      const s = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s);
+      cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.85));
+      return blob || file;
+    } catch (e) { return file; }
+  }
+
+  const PHOTO_ERR = {
+    too_large: "照片太大，請換一張小一點的",
+    unsupported_type: "不支援這種圖片格式，請用 JPG 或 PNG",
+    quota_or_state: "照片空間已滿，請先移除一些照片",
+    rate_limited: "上傳太頻繁，稍等一下再試",
+  };
+
+  $("photoInput").addEventListener("change", async () => {
+    const file = $("photoInput").files[0], target = photoTarget;
+    photoTarget = null;
+    if (!file || !target || !assets) return;
+    $("status").textContent = "上傳照片中…";
+    try {
+      const res = await assets.upload(await shrink(file));
+      const key = imgKey(target.cat, target.name), old = exImages[key];
+      exImages[key] = res.id;
+      commitEx(); render();
+      $("status").textContent = "照片已更新";
+      if (old) assets.delete(old).catch(() => {});
+    } catch (e) {
+      $("status").textContent = PHOTO_ERR[e && e.code] || "照片上傳失敗，請再試一次";
+    }
+  });
+
+  function removePhoto(cat, name, quiet) {
+    const key = imgKey(cat, name), id = exImages[key];
+    if (!id) return;
+    delete exImages[key];
+    if (!quiet) { commitEx(); render(); }
+    if (assets) assets.delete(id).catch(() => {});
+  }
+
+  function showPhoto(src) {
+    $("lightImg").src = src;
+    $("lightbox").hidden = false;
+    $("lightClose").focus();
+  }
+  $("exPhoto").addEventListener("click", () => showPhoto($("exPhoto").querySelector("img").src));
+  $("lightbox").addEventListener("click", () => { $("lightbox").hidden = true; });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") $("lightbox").hidden = true; });
+
+  function renderPrHint() {
+    const pic = selCat && selEx ? imgOf(selCat, selEx) : null;
+    $("exPhoto").hidden = !pic;
+    if (pic) { const im = $("exPhoto").querySelector("img"); if (im.getAttribute("src") !== pic) im.src = pic; }
+    const name = chosenName(), b = name && selCat !== "cardio" ? PR.best[name] : null;
+    const hint = $("prHint");
+    hint.hidden = !b;
+    if (b) hint.innerHTML = "目前最佳（8 下以上）：<b>" + b.weight + "</b> kg × " + b.reps + " 下・" + shortDate(b.date);
+  }
+
+  // ---------- workout start / end time ----------
+  const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  // ---------- 24-hour time picker (hour + minute columns); typing still works ----------
+  let hmTarget = null;   // { sid, field, h, m }
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  function openHM(input, sid, field, cur) {
+    const [h, m] = cur ? cur.split(":").map(Number) : [null, null];
+    hmTarget = { sid, field, h, m };
+    renderHM(true);
+    const pop = $("hmPop"), r = input.getBoundingClientRect();
+    pop.hidden = false;
+    const left = Math.min(Math.max(16, r.left + window.scrollX), window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 16);
+    pop.style.left = left + "px";
+    // open upward when there's no room below the field
+    const above = r.bottom + pop.offsetHeight + 12 > window.innerHeight && r.top > pop.offsetHeight + 12;
+    pop.style.top = (above ? r.top - pop.offsetHeight - 6 : r.bottom + 6) + window.scrollY + "px";
+    // centre the current hour/minute inside its own column without scrolling the page
+    ["hmH", "hmM"].forEach((id) => {
+      const c = $(id), on = c.querySelector(".on") || (id === "hmH" ? c.children[new Date().getHours()] : null);
+      c.scrollTop = on ? on.offsetTop - c.clientHeight / 2 + on.offsetHeight / 2 : 0;
+    });
+  }
+
+  function renderHM() {
+    const t = hmTarget;
+    const col = (n, step, cur, pick) => Array.from({ length: n / step }, (_, i) => {
+      const v = i * step, b = document.createElement("button");
+      b.type = "button"; b.textContent = pad2(v);
+      if (v === cur) b.classList.add("on");
+      b.addEventListener("click", () => pick(v));
+      return b;
+    });
+    $("hmH").replaceChildren(...col(24, 1, t.h, (v) => { t.h = v; if (t.m === null) t.m = 0; applyHM(false); }));
+    $("hmM").replaceChildren(...col(60, 5, t.m, (v) => { t.m = v; if (t.h === null) t.h = new Date().getHours(); applyHM(true); }));
+  }
+
+  function applyHM(close) {
+    const t = hmTarget;
+    setField(t.sid, t.field, pad2(t.h) + ":" + pad2(t.m));
+    if (close) closeHM(); else renderHM();
+  }
+  function closeHM() { $("hmPop").hidden = true; hmTarget = null; }
+
+  $("hmNow").addEventListener("click", () => { if (!hmTarget) return; const [h, m] = nowHM().split(":").map(Number); hmTarget.h = h; hmTarget.m = m; applyHM(true); });
+  $("hmClear").addEventListener("click", () => { if (!hmTarget) return; setField(hmTarget.sid, hmTarget.field, ""); closeHM(); });
+  $("hmDone").addEventListener("click", closeHM);
+  document.addEventListener("click", (ev) => {
+    // a picked button is re-rendered (detached) before this runs, so ignore detached targets
+    if (!$("hmPop").hidden && ev.target.isConnected && !ev.target.closest("#hmPop") && !ev.target.closest("input.hm")) closeHM();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("hmPop").hidden) closeHM(); });
+
+  // 24-hour text entry: keep digits and one colon; parseHM normalizes on commit
+  const typeHM = (v) => { const t = v.replace(/[^\d:]/g, ""); const i = t.indexOf(":"); return (i < 0 ? t : t.slice(0, i + 1) + t.slice(i + 1).replace(/:/g, "")).slice(0, 5); };
+  // "" → "" (cleared); "830"/"0830"/"8:30"/"18" → "08:30"/"18:00"; anything else → null
+  function parseHM(v) {
+    const t = v.trim();
+    if (!t) return "";
+    let h, m;
+    const mm = t.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (mm) { h = +mm[1]; m = +mm[2]; }
+    else {
+      const d = t.replace(/\D/g, "");
+      if (d.length <= 2) { h = +d; m = 0; }
+      else if (d.length === 3) { h = +d[0]; m = +d.slice(1); }
+      else { h = +d.slice(0, 2); m = +d.slice(2, 4); }
+    }
+    if (!(h >= 0 && h <= 23 && m >= 0 && m <= 59)) return null;
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+  const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
+
+  // a day can hold several sessions (e.g. a second workout at another gym); each has place/start/end.
+  // Older days kept one place/start/end on the day itself — read those as session 1.
+  const PLACES = ["正光廠", "復興廠", "大有廠", "經國廠"];
+  function sessionsOf(k) {
+    const d = days[k];
+    if (!d) return [{ id: "s1" }];
+    if (d.sessions && d.sessions.length) return d.sessions;
+    return [{ id: "s1", place: d.place, start: d.start, end: d.end }];
+  }
+  const sidOf = (e, ss) => (ss.some((s) => s.id === e.sid) ? e.sid : ss[0].id);
+
+  function writeSessions(ss) {
+    if (!store) return;
+    const day = days[current] || (days[current] = { date: current, entries: [] });
+    day.sessions = ss.map((s) => { const o = { id: s.id }; ["place", "start", "end"].forEach((f) => { if (s[f]) o[f] = s[f]; }); return o; });
+    delete day.place; delete day.start; delete day.end;
+    const empty = day.sessions.length === 1 && !day.sessions[0].place && !day.sessions[0].start && !day.sessions[0].end;
+    if (empty) delete day.sessions;
+    commit(current);
+    render();
+  }
+
+  function setField(sid, field, value) {
+    writeSessions(sessionsOf(current).map((s) => (s.id === sid ? { ...s, [field]: value || undefined } : s)));
+  }
+
+  const spanMin = (s, today) => {
+    if (!s.start || (!s.end && !today)) return null;
+    let m = toMin(s.end || nowHM()) - toMin(s.start);
+    return m < 0 ? m + 24 * 60 : m;
+  };
+
+  function renderSession() {
+    const ss = sessionsOf(current), today = current === ymd(new Date()), multi = ss.length > 1;
+    // total time across sessions
+    let total = null, live = false;
+    ss.forEach((s) => { const m = spanMin(s, today); if (m !== null) { total = (total || 0) + m; if (!s.end) live = true; } });
+    $("sDur").textContent = total === null ? "—" : Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
+    $("sDurLab").textContent = live ? "已練（進行中）" : multi ? "訓練時間（" + ss.length + " 場合計）" : "訓練時間";
+
+    // don't rebuild while the viewer is typing in a time field
+    if (typingInSession()) return;
+    const rows = ss.map((s, i) => {
+      const row = document.createElement("div");
+      row.className = "session";
+      row.innerHTML = (multi ? '<span class="s-label">第 ' + (i + 1) + " 場<i></i></span>" : "") +
+        '<div class="seg-box">' +
+        '<label class="seg seg-place"><span>地點</span><select></select></label>' +
+        '<label class="seg"><span>開始</span><input class="hm" type="text" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off"></label>' +
+        '<span class="seg-arrow" aria-hidden="true">→</span>' +
+        '<label class="seg"><span>結束</span><input class="hm" type="text" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off"></label>' +
+        "</div>" +
+        '<button type="button" class="primary tnow"></button>';
+      const sel = row.querySelector("select"), [st, en] = row.querySelectorAll("input");
+      sel.id = "place" + i; st.id = "tStart" + i; en.id = "tEnd" + i;
+      sel.replaceChildren(opt("", "未選擇"), ...PLACES.map((p) => opt(p, p)));
+      if (s.place && !PLACES.includes(s.place)) sel.append(opt(s.place, s.place));
+      sel.value = s.place || ""; st.value = s.start || ""; en.value = s.end || "";
+      sel.addEventListener("change", () => setField(s.id, "place", sel.value));
+      [[st, "start"], [en, "end"]].forEach(([inp, field]) => {
+        inp.setAttribute("aria-label", (field === "start" ? "開始" : "結束") + "時間（24 小時制，例如 18:30）");
+        inp.addEventListener("input", () => { inp.value = typeHM(inp.value); });
+        inp.addEventListener("click", () => openHM(inp, s.id, field, s[field]));
+        inp.addEventListener("change", () => {
+          const v = parseHM(inp.value);
+          if (v === null) { inp.value = s[field] || ""; $("status").textContent = "時間請用 24 小時制，例如 07:30 或 18:45"; return; }
+          inp.value = v;
+          setField(s.id, field, v);
+        });
+      });
+      const btn = row.querySelector(".tnow");
+      btn.hidden = !today || !!(s.start && s.end) || i !== ss.length - 1;
+      btn.textContent = s.start ? "結束訓練" : "開始訓練";
+      btn.classList.toggle("end", !!s.start);
+      btn.addEventListener("click", () => setField(s.id, s.start ? "end" : "start", nowHM()));
+      if (multi && i > 0) {
+        const del = document.createElement("button");
+        del.type = "button"; del.className = "s-del"; del.textContent = "刪除此場";
+        del.addEventListener("click", () => {
+          const n = entriesOf(current).filter((e) => sidOf(e, ss) === s.id).length;
+          if (!armConfirm(del, "刪除此場", n ? "確定？這場的 " + n + " 個動作會一起刪除" : "確定刪除？")) return;
+          const day = days[current];
+          if (day) day.entries = day.entries.filter((e) => sidOf(e, ss) !== s.id);
+          writeSessions(ss.filter((x) => x.id !== s.id));
+        });
+        row.querySelector(".s-label i").replaceWith(del);
+      }
+      return row;
+    });
+    const last = ss[ss.length - 1];
+    let add = null;
+    if (last.start || last.place) {
+      add = document.createElement("button");
+      add.type = "button"; add.className = "add-session";
+      add.textContent = "＋ 新增第 " + (ss.length + 1) + " 場（換地點再練）";
+      add.addEventListener("click", () => {
+        const id = "s" + Date.now().toString(36);
+        writeSessions(ss.concat([{ id }]));
+        if (!$("addForm").hidden) formSid = id;
+      });
+    }
+    // each session's controls head its own group in the day's list
+    rows.forEach((row, i) => {
+      const slot = $("list").querySelector('.group-session[data-sid="' + CSS.escape(ss[i].id) + '"]');
+      if (slot) slot.replaceChildren(row);
+    });
+    $("addSessionSlot").replaceChildren(...(add ? [add] : []));
+    $("addSessionSlot").hidden = !add;
+  }
+
+  function typingInSession() {
+    const a = document.activeElement;
+    return !!(a && a.closest && a.closest(".session") && a.tagName !== "BUTTON");
+  }
+
+  setInterval(() => { if (!document.hidden) renderSession(); }, 30000);
+
+  // ---------- backup: export / import everything as one JSON file ----------
+  const BACKUP_TAG = "fitpulse-backup";
+
+  async function exportBackup() {
+    const payload = { app: BACKUP_TAG, version: 1, exportedAt: new Date().toISOString(), days, exercises: exMap };
+    const filename = "健身紀錄備份-" + ymd(new Date()) + ".json";
+    const data = JSON.stringify(payload, null, 1);
+    try {
+      const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (dl) {
+        await dl.save({ filename, data });
+      } else {
+        // standalone page (e.g. GitHub Pages): a plain download link works there
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+        a.download = filename;
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }
+      $("status").textContent = "已匯出 " + Object.keys(days).length + " 天的紀錄";
+    } catch (e) {
+      $("status").textContent = e && e.code === "declined" ? "已取消匯出" : "匯出失敗，請再試一次";
+    }
+  }
+
+  // merge, never overwrite: entries already here (same id) are kept as they are
+  async function importBackup(file) {
+    let payload;
+    try { payload = JSON.parse(await file.text()); } catch (e) { payload = null; }
+    if (!payload || payload.app !== BACKUP_TAG || typeof payload.days !== "object") {
+      $("status").textContent = "這不是健身紀錄的備份檔，請選擇「健身紀錄備份-日期.json」";
+      return;
+    }
+    if (!store) return;
+    let addedDays = 0, addedEntries = 0;
+    const changed = [];
+    Object.entries(payload.days).forEach(([date, inc]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inc || !Array.isArray(inc.entries)) return;
+      const day = days[date] || (addedDays++, days[date] = { date, entries: [] });
+      const have = new Set(day.entries.map((e) => e.id));
+      const fresh = inc.entries.filter((e) => e && e.id && !have.has(e.id));
+      let touched = fresh.length > 0;
+      if (fresh.length) { day.entries = day.entries.concat(fresh); addedEntries += fresh.length; }
+      ["sessions", "start", "end", "place"].forEach((f) => {
+        if (inc[f] !== undefined && day[f] === undefined && !(f !== "sessions" && day.sessions)) { day[f] = inc[f]; touched = true; }
+      });
+      if (touched) changed.push(date);
+    });
+    if (payload.exercises && typeof payload.exercises === "object") {
+      let exChanged = false;
+      Object.entries(payload.exercises).forEach(([cat, list]) => {
+        if (!CAT[cat] || !Array.isArray(list)) return;
+        const merged = exList(cat).concat(list.filter((n) => typeof n === "string" && !exList(cat).includes(n)));
+        if (merged.length !== exList(cat).length || !exMap[cat]) { exMap[cat] = merged; exChanged = true; }
+      });
+      if (exChanged) commitEx();
+    }
+    $("status").textContent = "匯入中…";
+    for (const date of changed) await commit(date);
+    render();
+    $("status").textContent = "已匯入 " + addedEntries + " 個動作（新增 " + addedDays + " 天）";
+  }
+
+  $("exportBtn").addEventListener("click", exportBackup);
+  $("importBtn").addEventListener("click", () => { $("importInput").value = ""; $("importInput").click(); });
+  $("importInput").addEventListener("change", () => { const f = $("importInput").files[0]; if (f) importBackup(f); });
+
+  // ---------- two pages: today's log, and calendar + bests ----------
+  function showView(name) {
+    const hist = name === "hist";
+    $("viewLog").hidden = hist; $("viewHist").hidden = !hist;
+    $("tabLog").setAttribute("aria-selected", String(!hist));
+    $("tabHist").setAttribute("aria-selected", String(hist));
+    try { history.replaceState(null, "", hist ? "#hist" : "#log"); } catch (e) {}
+  }
+
+  function setCalOpen(open) {
+    $("calPop").hidden = !open;
+    $("dateBtn").setAttribute("aria-expanded", String(open));
+    if (open) { viewMonth = current.slice(0, 7); renderCalendar(); }
+  }
+  $("dateBtn").addEventListener("click", () => setCalOpen($("calPop").hidden));
+  document.addEventListener("click", (ev) => {
+    if (!$("calPop").hidden && !ev.target.closest(".dayhead-wrap")) setCalOpen(false);
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !$("calPop").hidden) { setCalOpen(false); $("dateBtn").focus(); }
+  });
+
+  function openDay(k) {
+    current = k; viewMonth = k.slice(0, 7);
+    setCalOpen(false);
+    showView("log");
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  $("tabLog").addEventListener("click", () => showView("log"));
+  $("tabHist").addEventListener("click", () => { viewMonth = current.slice(0, 7); render(); showView("hist"); });
+  $("backToday").addEventListener("click", () => openDay(ymd(new Date())));
+  showView(location.hash === "#hist" ? "hist" : "log");
+
+  // ---------- drag to reorder the day's entries ----------
+  let dragging = false, pendingRender = false;
+
+  function saveOrder() {
+    const ids = [...$("list").querySelectorAll(".entry")].map((r) => r.dataset.id).filter(Boolean);
+    const old = entriesOf(current);
+    if (ids.join() === old.map((x) => x.id).join()) return;
+    const byId = Object.fromEntries(old.map((x) => [x.id, x]));
+    days[current].entries = ids.map((id) => byId[id]).filter(Boolean);
+    commit(current);
+  }
+
+  // rows need data-id; `save` reads the new order from the DOM
+  function enableDrag(row, grip, list = $("list"), save = saveOrder) {
+    let grabOffset = 0;
+    const onMove = (ev) => {
+      row.style.transform = "none";
+      const prev = row.previousElementSibling, next = row.nextElementSibling;
+      if (prev && ev.clientY < prev.getBoundingClientRect().top + prev.offsetHeight / 2) list.insertBefore(row, prev);
+      else if (next && ev.clientY > next.getBoundingClientRect().top + next.offsetHeight / 2) list.insertBefore(next, row);
+      const natural = row.getBoundingClientRect().top;
+      row.style.transform = "translateY(" + (ev.clientY - grabOffset - natural) + "px)";
+    };
+    const onUp = () => {
+      grip.removeEventListener("pointermove", onMove);
+      row.classList.remove("dragging");
+      row.style.transform = "";
+      dragging = false;
+      pendingRender = false;
+      save();
+      render();
+    };
+    grip.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      grip.setPointerCapture(ev.pointerId);
+      dragging = true;
+      grabOffset = ev.clientY - row.getBoundingClientRect().top;
+      row.classList.add("dragging");
+      grip.addEventListener("pointermove", onMove);
+      grip.addEventListener("pointerup", onUp, { once: true });
+      grip.addEventListener("pointercancel", onUp, { once: true });
+    });
+    grip.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
+      ev.preventDefault();
+      const sib = ev.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+      if (!sib) return;
+      if (ev.key === "ArrowUp") list.insertBefore(row, sib); else list.insertBefore(sib, row);
+      save(); render();
+      const g = list.querySelector('[data-id="' + CSS.escape(row.dataset.id) + '"] .grip'); if (g) g.focus();
+    });
+  }
+
+  function render() {
+    if (dragging) { pendingRender = true; return; }
+    computePRs();
+    renderCalendar(); renderDay(); renderSession(); renderPicker(); renderManage(); renderPRs(); renderSince();
+  }
+
+  // ---------- events ----------
+  ["wds", "hWds"].forEach((id) => $(id).replaceChildren(...WEEK.map((w) => { const s = document.createElement("div"); s.className = "wd"; s.textContent = w; return s; })));
+  ["legend", "hLegend"].forEach((id) => $(id).replaceChildren(...CATS.map((c) => { const s = document.createElement("span"); s.innerHTML = '<i class="dot"></i>'; s.firstChild.style.background = catColor(c.key); s.append(c.label); return s; })));
+  $("hPrev").addEventListener("click", () => shiftHistMonth(-1));
+  $("hNext").addEventListener("click", () => shiftHistMonth(1));
+  $("hToday").addEventListener("click", () => { histMonth = ymd(new Date()).slice(0, 7); renderHistCal(); });
+  $("mPrev").addEventListener("click", () => shiftMonth(-1));
+  $("mNext").addEventListener("click", () => shiftMonth(1));
+  $("goToday").addEventListener("click", () => { current = ymd(new Date()); viewMonth = current.slice(0, 7); render(); });
+  $("customName").addEventListener("input", updateSubmit);
+  $("sidSel").addEventListener("change", (e) => { formSid = e.target.value; });
+  $("addSet").addEventListener("click", () => {
+    const last = setRows[setRows.length - 1];
+    const copy = last ? cloneSet(last) : { kind: "work", reps: 10, weight: 0 };
+    if (copy.kind === "warm") copy.kind = "work";
+    setRows.push(copy);
+    renderSets();
+    const n = setRows.length - 1;
+    $("setReps" + n).focus();
+  });
+  $("manageBtn").addEventListener("click", () => toggleManage($("manage").hidden));
+  $("manageClose").addEventListener("click", () => toggleManage(false));
+  $("mAdd").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const n = $("mNew").value.trim();
+    if (!n || !store) return;
+    $("mNew").value = "";
+    if (!exList(mCat).includes(n)) setList(mCat, exList(mCat).concat([n]));
+    $("mNew").focus();
+  });
+  $("mReset").addEventListener("click", (e) => {
+    if (!store) return;
+    if (armConfirm(e.currentTarget, "這個部位恢復預設動作", "確定恢復？自訂的動作會被移除")) { delete exMap[mCat]; commitEx(); render(); }
+  });
+  $("catSel").addEventListener("change", (e) => { selCat = e.target.value || null; selEx = null; $("customName").value = ""; renderPicker(); });
+  $("exSel").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (v === CUSTOM) { selEx = ""; renderPicker(); $("customName").focus(); }
+    else { selEx = v || null; if (selEx) fillLast(selEx); renderPicker(); }
+  });
+
+  $("addForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const name = chosenName();
+    if (!store || !selCat || !name) return;
+    let entry;
+    if (selCat === "cardio") {
+      const minutes = parseInt($("exMin").value, 10), km = parseFloat($("exKm").value);
+      if (!(minutes > 0)) return;
+      entry = { cat: selCat, name, minutes, km: km > 0 ? km : 0 };
+    } else {
+      if (setRows.some((s) => stagesOf(s).some((st) => !(st.reps > 0) || !(st.weight > 0)))) { $("status").textContent = "每一組都要填次數和重量"; return; }
+      const list = setRows.map((s) => {
+        const out = { kind: s.kind, reps: s.reps, weight: s.weight };
+        if (s.kind === "drop" && s.drops && s.drops.length) out.drops = s.drops.map((d) => ({ reps: d.reps, weight: d.weight }));
+        return out;
+      });
+      if (!list.length) { $("status").textContent = "至少要有一組填了次數"; return; }
+      entry = { cat: selCat, name, list };
+    }
+    if (selEx === "" && !exList(selCat).includes(name)) { exMap[selCat] = exList(selCat).concat([name]); commitEx(); }
+    const date = editing ? editing.date : current;
+    entry.sid = pickSid(date);
+    const day = days[date] || (days[date] = { date, entries: [] });
+    const at = editing ? day.entries.findIndex((x) => x.id === editing.id) : -1;
+    if (at >= 0) {
+      entry.id = editing.id;
+      day.entries = day.entries.map((x, i) => (i === at ? entry : x));
+    } else {
+      entry.id = Date.now().toString(36);
+      day.entries = day.entries.concat([entry]);
+    }
+    commit(date);
+    const wasEditing = !!editing;
+    exitEdit();
+    if (wasEditing) { $("status").textContent = "已儲存修改"; setFormOpen(false); }
+    render();
+  });
+
+  // ---------- edit an entry already logged ----------
+  let editing = null;   // { id, date }
+
+  function startEdit(e) {
+    editing = { id: e.id, date: current };
+    formSid = sidOf(e, sessionsOf(current));
+    selCat = CAT[e.cat] ? e.cat : null;
+    if (selCat && exList(selCat).includes(e.name)) { selEx = e.name; $("customName").value = ""; }
+    else { selEx = ""; $("customName").value = e.name; }
+    if (e.cat === "cardio") { $("exMin").value = e.minutes || ""; $("exKm").value = e.km || ""; }
+    else { setRows = setsOf(e).map(cloneSet); renderSets(); }
+    setsTouched = true; cardioTouched = true;   // keep the loaded numbers if the exercise is switched
+    const d = parse(current);
+    $("editNote").textContent = "正在修改 " + (d.getMonth() + 1) + "/" + d.getDate() + " 的「" + e.name + "」";
+    $("editNote").hidden = false;
+    $("addForm").classList.add("editing");
+    setFormOpen(true);
+    $("formTitle").textContent = "修改動作";
+    $("submitBtn").textContent = "儲存修改";
+    $("cancelEdit").hidden = false;
+    render();
+    $("addForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function exitEdit() {
+    editing = null;
+    formSid = null;
+    resetTouched();
+    selEx = null; $("customName").value = ""; $("customName").hidden = true;
+    $("editNote").hidden = true;
+    $("addForm").classList.remove("editing");
+    $("formTitle").textContent = "新增動作";
+    $("submitBtn").textContent = "加入這天的紀錄";
+    $("cancelEdit").hidden = true;
+  }
+
+  $("cancelEdit").addEventListener("click", () => { exitEdit(); setRows = defaultRows(); renderSets(); setFormOpen(false); render(); });
+
+  // the entry form stays folded until asked for
+  function setFormOpen(open) {
+    $("addForm").hidden = !open;
+    $("openForm").hidden = open;
+    $("openForm").setAttribute("aria-expanded", String(open));
+  }
+  $("openForm").addEventListener("click", () => { setFormOpen(true); $("catSel").focus(); });
+  $("closeForm").addEventListener("click", () => {
+    if (editing) { exitEdit(); setRows = defaultRows(); renderSets(); render(); }
+    setFormOpen(false);
+    $("openForm").focus();
+  });
+
+  renderSets();
+  render();
+  initStore().then((s) => { store = s; render(); }).catch(() => { store = localStore(); render(); });
+})();
+</script>
+</body>
+</html>
