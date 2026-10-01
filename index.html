@@ -309,6 +309,9 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
 .code-row { display: flex; gap: 8px; }
 .code-row input { flex: 1; font-family: var(--display); font-size: 1.15rem; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
 .code-row button { white-space: nowrap; }
+.pw-steps { margin: 0; padding: 12px 14px 12px 32px; background: var(--bg); border-radius: 10px; display: grid; gap: 6px; font-size: .9rem; }
+.pw-steps code { font-family: var(--display); font-size: 1rem; background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+#pwDone { justify-self: start; padding: 8px 16px; }
 .code-banner { display: grid; gap: 10px; background: color-mix(in srgb, var(--c-back) 12%, var(--surface)); border: 1px solid var(--c-back); border-radius: 12px; padding: 12px 14px; font-size: .9rem; }
 .banner-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .banner-acts button { padding: 8px 14px; }
@@ -532,9 +535,17 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
           <button type="button" id="copyCode">複製</button>
         </div>
         <div class="backup-actions">
-          <button type="submit" class="primary">存到 iPhone 密碼</button>
+          <button type="button" class="primary" id="savePw">存到 iPhone 密碼 App</button>
           <button type="button" id="shareCode">傳給自己（LINE／備忘錄）</button>
         </div>
+        <ol class="pw-steps" id="pwSteps" hidden>
+          <li><b>備份碼已經複製好了。</b>打開 iPhone 的「<b>密碼</b>」App，按右上角「<b>＋</b>」。</li>
+          <li>「網站或標籤」填 <code>fitpulse-cyd.vercel.app</code></li>
+          <li>「使用者名稱」填 <code>FitPulse</code></li>
+          <li>「密碼」欄位長按 →「<b>貼上</b>」，按「<b>儲存</b>」。</li>
+          <li>回到這裡，按下面的「我已存好」。</li>
+        </ol>
+        <button type="button" id="pwDone" hidden>我已存好</button>
       </form>
       <form class="code-form" id="restoreForm" autocomplete="on">
         <input type="text" name="username" autocomplete="username" value="FitPulse 健身紀錄" readonly class="vh" tabindex="-1" aria-hidden="true">
@@ -1674,12 +1685,20 @@ form.add.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--acce
       else { await navigator.clipboard.writeText(text); $("status").textContent = "已複製備份碼，可以貼到備忘錄或 LINE"; }
     } catch (e) { /* the viewer closed the share sheet */ }
   });
-  // submitting this little "login" form lets the iPhone offer to save the code in the Passwords app
-  $("codeForm").addEventListener("submit", (ev) => {
-    ev.preventDefault();
+  // iPhone won't offer to save a password from a home-screen app, so copy the code and walk through saving it by hand
+  $("codeForm").addEventListener("submit", (ev) => ev.preventDefault());
+  $("savePw").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(lsGet(LS_CODE)); }
+    catch (e) { $("cloudCode").select(); }
+    $("pwSteps").hidden = false;
+    $("pwDone").hidden = false;
+    $("pwSteps").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  $("pwDone").addEventListener("click", () => {
     lsSet(LS_ACK, lsGet(LS_CODE));
+    $("pwSteps").hidden = true; $("pwDone").hidden = true;
     renderCloud();
-    $("status").textContent = "如果 iPhone 跳出「儲存密碼」，按「儲存」就完成了";
+    $("status").textContent = "好的，備份碼已存好";
   });
   $("ackCode").addEventListener("click", () => { lsSet(LS_ACK, lsGet(LS_CODE)); renderCloud(); });
   $("bannerGo").addEventListener("click", () => {
